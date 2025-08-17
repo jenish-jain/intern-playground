@@ -6,8 +6,8 @@ Dobby is a helper CLI application with the following features:
 - Fetch random dad jokes
 
 ## Code Structure
+- `main.go`: Entry point of the application
 - `cmd/`: Contains the main application logic
-  - `main.go`: Entry point of the application
   - `generate_password.go`: Password generation functionality
   - `dadjoke.go`: Dad joke fetching functionality
 - `go.mod` and `go.sum`: Go module files
@@ -17,7 +17,7 @@ Dobby is a helper CLI application with the following features:
 1. Ensure Go 1.22.0 or later is installed
 2. Clone the repository
 3. Run `go mod tidy` to download dependencies
-4. Use `go run cmd/main.go` to run the application
+4. Use `go run main.go` to run the application
 
 ## Commands
 - `dobby generate-password`: Generate a random password

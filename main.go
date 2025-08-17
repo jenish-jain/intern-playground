@@ -1,69 +1,22 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"os"
+
+	"dobby/cmd"
 
 	"github.com/spf13/cobra"
 )
 
-type Joke struct {
-	Joke string `json:"joke"`
-}
-
-func getJoke() (string, error) {
-	req, err := http.NewRequest("GET", "https://icanhazdadjoke.com/", nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Accept", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	var joke Joke
-	err = json.Unmarshal(body, &joke)
-	if err != nil {
-		return "", err
-	}
-
-	return joke.Joke, nil
-}
-
-func dadJokeCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "dadjoke",
-		Short: "Get a random dad joke",
-		Run: func(cmd *cobra.Command, args []string) {
-			joke, err := getJoke()
-			if err != nil {
-				fmt.Println("Error:", err)
-				return
-			}
-			fmt.Println(joke)
-		},
-	}
-}
-
 func main() {
-	rootCmd := &cobra.Command{
+	var rootCmd = &cobra.Command{
 		Use:   "dobby",
-		Short: "Dobby is a helper CLI app",
+		Short: "Dobby CLI application",
 	}
 
-	rootCmd.AddCommand(dadJokeCmd())
+	rootCmd.AddCommand(cmd.GeneratePasswordCmd())
+	rootCmd.AddCommand(cmd.DadJokeCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"encoding/json"
@@ -15,7 +15,7 @@ type Joke struct {
 	Status int    `json:"status"`
 }
 
-func dadJokeCmd() *cobra.Command {
+func DadJokeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "dadjoke",
 		Short: "Get a random dad joke",
@@ -31,7 +31,14 @@ func dadJokeCmd() *cobra.Command {
 }
 
 func getDadJoke() (string, error) {
-	resp, err := http.Get("https://icanhazdadjoke.com/")
+	req, err := http.NewRequest("GET", "https://icanhazdadjoke.com/", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
