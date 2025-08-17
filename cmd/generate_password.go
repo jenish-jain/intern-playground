@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func generatePasswordCmd() *cobra.Command {
+func GeneratePasswordCmd() *cobra.Command {
 	var length int
 	var includeCaps, includeNumbers, includeSpecial bool
 
