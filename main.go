@@ -17,6 +17,7 @@ func main() {
 
 	rootCmd.AddCommand(cmd.GeneratePasswordCmd())
 	rootCmd.AddCommand(cmd.DadJokeCmd())
+	rootCmd.AddCommand(cmd.TodoCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
