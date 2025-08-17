@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+
+	"github.com/spf13/cobra"
 )
 
 type Joke struct {
@@ -39,11 +42,31 @@ func getJoke() (string, error) {
 	return joke.Joke, nil
 }
 
-func main() {
-	joke, err := getJoke()
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
+func dadJokeCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "dadjoke",
+		Short: "Get a random dad joke",
+		Run: func(cmd *cobra.Command, args []string) {
+			joke, err := getJoke()
+			if err != nil {
+				fmt.Println("Error:", err)
+				return
+			}
+			fmt.Println(joke)
+		},
 	}
-	fmt.Println(joke)
+}
+
+func main() {
+	rootCmd := &cobra.Command{
+		Use:   "dobby",
+		Short: "Dobby is a helper CLI app",
+	}
+
+	rootCmd.AddCommand(dadJokeCmd())
+
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }
