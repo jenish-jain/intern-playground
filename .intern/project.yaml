@@ -1,0 +1,8 @@
+setup:
+  - name: deps
+    run: npm ci --prefix book-cricket
+verify:
+  - name: test
+    run: npm test --prefix book-cricket
+protected_paths: [".intern/"]
+test_paths: ["book-cricket/tests/"]

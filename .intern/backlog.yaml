@@ -1,0 +1,308 @@
+epics:
+  - id: SETUP
+    title: Project scaffold
+    goal: The book-cricket app skeleton exists, tests run locally and in CI.
+    tickets:
+      - id: SETUP-1
+        title: Scaffold book-cricket/ with test harness and CI
+        description: |
+          Create the `book-cricket/` folder as described in docs/architecture.md and CLAUDE.md. Do not touch Go files.
+          - `index.html`: viewport meta tag, links `style.css`, loads `script.js` with `defer` at the end of body.
+            Contains all six screen sections with the ids from the DOM contract (`#screen-setup`, `#screen-toss`,
+            `#screen-game`, `#screen-break`, `#screen-result`, `#screen-history`) and all the child elements listed
+            there (empty placeholders are fine; behavior comes in later tickets). Every section except
+            `#screen-setup` has the `hidden` class. `#balls-select` has options 6, 12, 18 with 6 selected.
+          - `style.css`: `.hidden { display: none !important; }`, CSS custom properties for colours on `:root`,
+            basic mobile-first single column.
+          - `script.js`: the three section comments (logic, storage, UI), an `init()` that does nothing yet, and the
+            `module.exports` / `init()` footer from the architecture doc (export an empty object for now).
+          - `package.json`: name `book-cricket`, private, `"engines": { "node": ">=20" }`, script `"test": "node --test"`,
+            devDependency `jsdom`; commit `package-lock.json`. Add `node_modules/` to the root `.gitignore`.
+          - `tests/helpers/app.js`: `loadApp({ storage, random, confirm, config })` exactly as specified in the
+            Testing section of docs/architecture.md (`config` sets `window.BOOK_CRICKET_CONFIG` before script eval).
+          - `tests/smoke.test.js`: a smoke test.
+          - `.github/workflows/book-cricket.yml`: on push and pull_request, Node 20, `npm ci` and `npm test` in `book-cricket/`.
+          - A short "Book Cricket" section in the root README with how to run and test.
+        acceptance_criteria:
+          - "`npm ci --prefix book-cricket && npm test --prefix book-cricket` exits 0 from the repository root"
+          - "require('../script.js') in Node does not throw"
+          - "loadApp() returns a document in which #screen-setup is visible and the other five screen sections have class 'hidden'"
+          - "loadApp() document contains every element id listed in the DOM contract of docs/architecture.md"
+          - "#balls-select has exactly the option values 6, 12, 18 and 6 is selected"
+          - "index.html contains <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+          - "loadApp({ storage: { 'bookCricket.players': { p1: 'A', p2: 'B' } } }) makes window.localStorage.getItem('bookCricket.players') return '{\"p1\":\"A\",\"p2\":\"B\"}'"
+          - "loadApp({ random: [0.1, 0.2] }) makes window.Math.random() return 0.1, then 0.2, then 0.2"
+        blocked_by: []
+        size: M
+
+  - id: CORE
+    title: Game rules
+    goal: Pure, tested functions implement flipping, scoring, innings end and the result.
+    tickets:
+      - id: CORE-1
+        title: Page flip and last-digit result
+        description: |
+          In the logic section of `script.js`, implement and export `flipPage(rng = Math.random)` and
+          `resultForPage(page)` as specified in docs/architecture.md. Pure functions, no DOM.
+          `resultForPage` returns `{ page, digit, runs, out, label }`; labels are "1 run", "N runs" (2-6), "Dot ball", "OUT".
+        acceptance_criteria:
+          - "flipPage(() => 0) returns 1 and flipPage(() => 0.99999) returns 200"
+          - "for 1000 calls with Math.random, flipPage() always returns an integer between 1 and 200 inclusive"
+          - "resultForPage(143) returns { page: 143, digit: 3, runs: 3, out: false, label: '3 runs' }"
+          - "resultForPage(21) has runs 1 and label '1 run'; resultForPage(196) has runs 6 and label '6 runs'"
+          - "resultForPage(7), resultForPage(118), resultForPage(199) each have runs 0, out false, label 'Dot ball'"
+          - "resultForPage(10), resultForPage(200) each have runs 0, out true, label 'OUT'"
+          - "for every page 1-200, runs equals page % 10 when that is 1-6, otherwise 0, and out is true exactly when page % 10 === 0"
+        blocked_by: [SETUP-1]
+        size: S
+
+      - id: CORE-2
+        title: Game state engine and result
+        description: |
+          Implement and export `createGame`, `playBall`, `startSecondInnings` and `computeResult` with the state shape
+          and transitions in docs/architecture.md ("Game state"). `playBall(state, page)` uses `resultForPage` and
+          returns a new object (deep-copy the parts you change; never mutate the input). Target = first innings score + 1.
+          Innings 2 ends as soon as the chaser's score >= target. Every ball, including OUT, uses up a ball.
+          `computeResult` returns `{ winner: 'p1' | 'p2' | null, p1Score, p2Score }`; null means a tie.
+        acceptance_criteria:
+          - "createGame({ p1: 'Asha', p2: 'Ravi', ballsPerInnings: 6 }) returns phase 'innings', currentInnings 1, currentBatter 'p1', battingOrder ['p1','p2'], scores { p1: 0, p2: 0 }, ballsLeft 6, target null"
+          - "createGame with firstBatter 'p2' returns currentBatter 'p2' and battingOrder ['p2','p1']"
+          - "playBall on a new game with page 4 gives scores.p1 4, ballsLeft 5, log.p1 length 1, lastBall.page 4, and the input state is unchanged (deep-equal to a copy taken before the call)"
+          - "with ballsPerInnings 6, playing pages 1,2,3,4,5,6 ends innings 1 with phase 'break', scores.p1 21 and target 22"
+          - "playing page 10 as the first ball of innings 1 gives phase 'break', out.p1 true, scores.p1 0, target 1"
+          - "startSecondInnings on a 'break' state gives phase 'innings', currentInnings 2, currentBatter 'p2', ballsLeft equal to ballsPerInnings"
+          - "with target 5, innings 2 pages 3 then 2 ends with phase 'result' after the second ball, ballsLeft 4, result.winner 'p2'"
+          - "innings 1 scores 6 (pages 6,10); innings 2 scores 6 then is out (pages 6,10): result.winner null"
+          - "innings 1 scores 12; innings 2 uses all 6 balls scoring 3: phase 'result', result { winner: 'p1', p1Score: 12, p2Score: 3 }"
+          - "playBall on a state with phase 'break' or 'result' returns a state deep-equal to the input"
+          - "with firstBatter 'p2', a full match records innings 1 runs in scores.p2 and log.p2 and computeResult reports the correct winner"
+        blocked_by: [CORE-1]
+        size: M
+
+  - id: PLAY
+    title: Playable match
+    goal: Two players can play a full match in the browser from setup to result.
+    tickets:
+      - id: PLAY-1
+        title: Setup screen and first innings UI
+        description: |
+          Implement and export `normalizeNames(rawP1, rawP2)` (see architecture). In the UI section, add the module-level
+          `gameState`, `ui` state, `render()` and handlers so that the setup screen starts a match and innings 1 is
+          playable. Start: read names and balls, call `normalizeNames`; on error show the message in `#setup-error` and
+          stay on setup; otherwise `createGame` and show `#screen-game`. Flip: `playBall(gameState, flipPage())` then `render()`.
+          Scoreboard and ball log use the ids and text formats in the DOM contract. When innings 1 ends, show
+          `#screen-break` with `#break-score` and `#break-target` filled (the button is wired in PLAY-2).
+          The toss checkbox is ignored in this ticket (Player 1 always bats first).
+        acceptance_criteria:
+          - "normalizeNames('  Asha ', 'Ravi') returns { p1: 'Asha', p2: 'Ravi', error: null }"
+          - "normalizeNames('', '   ') returns { p1: 'Player 1', p2: 'Player 2', error: null }"
+          - "normalizeNames('asha', 'ASHA ') returns an error 'Players must have different names'"
+          - "entering 'Asha' and 'asha' and clicking #start-btn keeps #screen-setup visible and shows #setup-error with 'Players must have different names'"
+          - "entering 'Asha'/'Ravi', choosing 12 balls and clicking #start-btn shows only #screen-game with #batter-name 'Asha', #score '0', #balls-left '12', #innings-label 'Innings 1', #last-page '–'"
+          - "with loadApp({ random: [(147-0.5)/200] }), one #flip-btn click shows #last-page '147', #last-result 'Dot ball', #balls-left '5' (6 balls) and #ball-log has one li 'Ball 1: Page 147 – Dot ball'"
+          - "flipping pages 4 then 6 shows #score '10' and two #ball-log items in order"
+          - "#target-info is hidden during innings 1"
+          - "flipping page 10 on the first ball shows only #screen-break with #break-score containing '0' and #break-target containing '1'"
+          - "after six non-out flips (6 balls) totalling 15, #screen-break is shown with #break-target containing '16'"
+          - "a player name containing '<b>x</b>' is displayed as literal text in #batter-name (no b element is created)"
+        blocked_by: [CORE-2]
+        size: M
+
+      - id: PLAY-2
+        title: Second innings, result screen and replay buttons
+        description: |
+          Wire `#break-continue-btn` to `startSecondInnings` and render innings 2 with `#target-info` visible
+          (`#target`, `#runs-needed` = max(target - score, 0)). When the match ends show `#screen-result`:
+          `#result-banner` ("{name} wins!" or "It's a tie!"), both scores, and both ball logs (`#result-log-p1`,
+          `#result-log-p2`, same item format as the live log). Play Again starts a new match with the same names,
+          balls per innings and batting order and shows `#screen-game`; Change Players shows `#screen-setup` with the
+          current names in the inputs. `#view-history-btn` is wired in HIST-2.
+        acceptance_criteria:
+          - "after innings 1 totals 15 and #break-continue-btn is clicked, #screen-game shows #innings-label 'Innings 2', #batter-name = player 2's name, #score '0', #target '16', #runs-needed '16', #ball-log empty"
+          - "in innings 2 with target 16, flipping page 6 shows #runs-needed '10'"
+          - "when player 2 reaches the target, #screen-result is shown immediately (no further flips accepted) and #result-banner reads '{p2 name} wins!'"
+          - "when player 2 is out below the target, #result-banner reads '{p1 name} wins!'"
+          - "when both innings end with equal totals, #result-banner reads \"It's a tie!\""
+          - "#result-p1-score and #result-p2-score show the two totals and #result-log-p1 / #result-log-p2 contain one li per ball in 'Ball n: Page p – label' format"
+          - "clicking #play-again-btn shows #screen-game with innings 1, score 0, the same batter name and the same balls per innings"
+          - "clicking #change-players-btn shows #screen-setup with #p1-name and #p2-name holding the previous names"
+        blocked_by: [PLAY-1]
+        size: M
+
+      - id: PLAY-3
+        title: Optional toss for batting order
+        description: |
+          When `#toss-toggle` is checked at Start, flip a coin with `Math.random() < 0.5` (true = Player 1 bats first),
+          show `#screen-toss` with `#toss-result` "{name} won the toss and bats first", and on `#toss-continue-btn`
+          start the game with `createGame({ ..., firstBatter })`. Unchecked keeps the current behavior. Play Again keeps
+          the same batting order without a new toss. The coin flip uses the first Math.random() value consumed after Start.
+        acceptance_criteria:
+          - "with #toss-toggle unchecked, Start goes straight to #screen-game with player 1 batting"
+          - "with #toss-toggle checked and loadApp({ random: [0.2] }), Start shows only #screen-toss with #toss-result 'Asha won the toss and bats first' (p1 'Asha')"
+          - "with #toss-toggle checked and random [0.8], #toss-result reads 'Ravi won the toss and bats first' and after #toss-continue-btn #batter-name is 'Ravi'"
+          - "after player 2 batted first, the innings break target is player 2's score + 1 and innings 2 #batter-name is player 1's name"
+          - "the result banner names the correct winner when player 2 batted first and player 1 chased successfully"
+        blocked_by: [PLAY-2]
+        size: S
+
+  - id: HIST
+    title: Saved names and match history
+    goal: Names and the last 10 matches survive a refresh, and history can be viewed and reset.
+    tickets:
+      - id: HIST-1
+        title: Storage functions
+        description: |
+          In the storage section of `script.js`, implement and export `loadPlayers`, `savePlayers`, `loadHistory`,
+          `addHistory`, `clearHistory` and `buildHistoryEntry` as specified in docs/architecture.md and ADR 0004.
+          Each takes the storage object as its first argument (except `buildHistoryEntry(state, date)`). All access in
+          try/catch; corrupt or wrong-shaped data returns the default (`null` for players, `[]` for history).
+          `buildHistoryEntry` needs a state in phase 'result' and returns the PRD shape including `battedFirst`.
+          No DOM wiring in this ticket.
+        acceptance_criteria:
+          - "savePlayers(s, { p1: 'Asha', p2: 'Ravi' }) then loadPlayers(s) returns { p1: 'Asha', p2: 'Ravi' } and s.getItem('bookCricket.players') is valid JSON"
+          - "loadPlayers on empty storage returns null; with 'bookCricket.players' set to 'not json' returns null"
+          - "loadHistory returns [] when the key is missing, holds invalid JSON, or holds a non-array such as '{}'"
+          - "addHistory prepends: after adding entries A then B, loadHistory returns [B, A]"
+          - "after adding 11 entries, loadHistory returns 10 entries and the first-added entry is gone"
+          - "clearHistory then loadHistory returns []"
+          - "with a storage whose getItem and setItem throw, every storage function returns its default without throwing"
+          - "buildHistoryEntry for a result state (Asha 18 vs Ravi 14, 6 balls, p1 first) with date new Date('2026-10-13T12:30:00Z') returns { date: '2026-10-13T12:30:00.000Z', p1: { name: 'Asha', score: 18 }, p2: { name: 'Ravi', score: 14 }, winner: 'Asha', ballsPerInnings: 6, battedFirst: 'p1' }"
+          - "buildHistoryEntry for a tied result has winner null"
+        blocked_by: [SETUP-1]
+        size: S
+
+      - id: HIST-2
+        title: Remember player names
+        description: |
+          On a successful Start, save the normalized names with `savePlayers(window.localStorage, ...)`. In `init()`,
+          pre-fill `#p1-name` and `#p2-name` from `loadPlayers`. Storage failures must not break the game.
+        acceptance_criteria:
+          - "after starting a match as 'Asha'/'Ravi', localStorage 'bookCricket.players' parses to { p1: 'Asha', p2: 'Ravi' }"
+          - "loadApp({ storage: { 'bookCricket.players': { p1: 'Asha', p2: 'Ravi' } } }) shows #p1-name 'Asha' and #p2-name 'Ravi'"
+          - "with 'bookCricket.players' holding invalid JSON, the inputs are empty and Start still works"
+          - "a failed Start (duplicate names) does not change the saved names"
+        blocked_by: [HIST-1, PLAY-1]
+        size: S
+
+      - id: HIST-3
+        title: Save matches, history screen and reset
+        description: |
+          When a match reaches phase 'result', save exactly one `buildHistoryEntry` via `addHistory`. Implement the
+          History screen: `#view-history-btn` (result screen) and `#setup-history-btn` (setup screen) open
+          `#screen-history`; rows in `#history-table` tbody, newest first, columns Date (local `YYYY-MM-DD HH:MM`),
+          Player 1 ("name (score)"), Player 2 ("name (score)"), Winner (name or "Tie"), Balls. `#history-empty` is shown
+          only when there are no matches. `#reset-history-btn` asks `window.confirm('Clear all match history?')` and
+          clears only if confirmed. `#history-back-btn` returns to the screen History was opened from.
+        acceptance_criteria:
+          - "finishing a match adds exactly one entry to 'bookCricket.history' with the correct scores and winner, and re-rendering or clicking buttons on the result screen adds no more"
+          - "loadApp with 3 stored history entries, clicking #setup-history-btn shows only #screen-history with 3 tbody rows in stored order and #history-empty hidden"
+          - "a stored entry with winner null shows 'Tie' in the Winner column; one with winner 'Asha' shows 'Asha'"
+          - "a row shows Player 1 as 'Asha (18)' and Balls as '6'"
+          - "with no history, #history-empty is visible and the tbody has no rows"
+          - "clicking #reset-history-btn with confirm returning true empties the table and 'bookCricket.history' parses to []"
+          - "clicking #reset-history-btn with confirm returning false keeps all rows and stored entries"
+          - "#history-back-btn returns to #screen-result when opened from the result screen and to #screen-setup when opened from setup"
+          - "after finishing a match, a fresh loadApp using the same localStorage contents shows that match in the history table"
+        blocked_by: [HIST-1, PLAY-2]
+        size: M
+
+  - id: UX
+    title: Responsive layout
+    goal: The game is comfortable to play on phones and desktops.
+    tickets:
+      - id: UX-1
+        title: Mobile-first responsive styling
+        description: |
+          Polish `style.css` per the Styling section of docs/architecture.md: single centred column, `max-width: 480px`
+          container, large Flip button, readable scoreboard, tables that don't overflow on 320px screens
+          (wrap `#history-table` in a container with `overflow-x: auto`). Since jsdom does no layout, tests check the
+          CSS text and markup.
+        acceptance_criteria:
+          - "style.css contains a rule for 'main' (or the app container) with max-width: 480px and margin auto centering"
+          - "style.css gives #flip-btn a min-height of at least 48px and every button a min-height of at least 44px"
+          - "#history-table's parent element has a class whose CSS rule sets overflow-x: auto"
+          - "style.css contains no width declarations above 480px outside a @media (min-width: ...) block"
+          - "style.css colours are declared as custom properties on :root and used via var(--...)"
+        blocked_by: [SETUP-1]
+        size: S
+
+  - id: EXTRA
+    title: Nice-to-have features
+    goal: Extra polish and modes after the MVP is complete.
+    tickets:
+      - id: EXTRA-1
+        title: Page-flip animation and book graphic
+        description: |
+          Add a CSS book graphic (`#book`) on the game screen. On Flip, add class `flipping` to `#book`, disable
+          `#flip-btn`, and apply the ball after `BOOK_CRICKET_CONFIG.animationMs` (default 600) using setTimeout, then
+          remove the class and re-enable the button. With animationMs 0 the ball is applied synchronously. Respect
+          `prefers-reduced-motion` in CSS by disabling the animation.
+        acceptance_criteria:
+          - "#screen-game contains an element #book"
+          - "with config { animationMs: 0 }, a flip updates #score immediately and #book does not keep class 'flipping'"
+          - "with config { animationMs: 50 }, right after a click #book has class 'flipping', #flip-btn is disabled and #balls-left is unchanged; after awaiting 80ms the ball is applied, the class is gone and the button is enabled"
+          - "clicking #flip-btn twice during one animation applies only one ball"
+          - "style.css contains a @media (prefers-reduced-motion: reduce) rule"
+        blocked_by: [PLAY-2]
+        size: S
+
+      - id: EXTRA-2
+        title: Sound effects for a six or a wicket, with mute
+        description: |
+          Generate short tones with the Web Audio API (no audio files): one for a six, one for OUT, via a
+          `playSound(kind)` UI function that does nothing if `window.AudioContext` is missing. Add a `#mute-toggle`
+          button on the game screen; the muted flag persists in `bookCricket.muted` (JSON boolean).
+        acceptance_criteria:
+          - "with a stub window.AudioContext that records created oscillators, flipping page 6 creates one oscillator and flipping page 10 creates one; flipping page 3 creates none"
+          - "with window.AudioContext undefined, flipping page 6 does not throw"
+          - "after clicking #mute-toggle, flipping page 6 creates no oscillator and 'bookCricket.muted' parses to true"
+          - "loadApp with 'bookCricket.muted' true shows #mute-toggle in the muted state (aria-pressed='true')"
+        blocked_by: [PLAY-2]
+        size: S
+
+      - id: EXTRA-3
+        title: Win/loss/tie tally per player name
+        description: |
+          Keep a tally in `bookCricket.tally`: `{ [name]: { w, l, t } }`, updated once per finished match (names
+          matched case-insensitively, stored under the most recently used spelling). Reset history does not clear it.
+          Show each current player's record on the result screen in `#tally-p1` and `#tally-p2` as "W {w} · L {l} · T {t}".
+          Add exported pure `updateTally(tally, entry)` returning a new object.
+        acceptance_criteria:
+          - "updateTally({}, entry with winner 'Asha' between Asha and Ravi) returns { Asha: { w: 1, l: 0, t: 0 }, Ravi: { w: 0, l: 1, t: 0 } } and does not mutate its input"
+          - "a tied entry increments t for both players"
+          - "updateTally with an existing key 'asha' and a new entry for 'Asha' increments that record and stores it under 'Asha'"
+          - "after finishing a match won by Asha in the UI, #tally-p1 reads 'W 1 · L 0 · T 0' and #tally-p2 reads 'W 0 · L 1 · T 0'"
+          - "with invalid JSON in 'bookCricket.tally', finishing a match starts a fresh tally without throwing"
+          - "confirming reset history leaves 'bookCricket.tally' unchanged"
+        blocked_by: [HIST-3]
+        size: S
+
+      - id: EXTRA-4
+        title: Dark mode toggle
+        description: |
+          Add `#theme-toggle` (visible on every screen, e.g. in a header). It sets `data-theme="dark"` or removes it on
+          `<html>`, and persists `bookCricket.theme` ("light" | "dark"). Without a saved theme, follow
+          `matchMedia('(prefers-color-scheme: dark)')` when available. Dark colours override the `:root` custom properties.
+        acceptance_criteria:
+          - "clicking #theme-toggle sets document.documentElement data-theme to 'dark' and 'bookCricket.theme' to 'dark'; clicking again removes it and stores 'light'"
+          - "loadApp with 'bookCricket.theme' 'dark' starts with data-theme 'dark'"
+          - "with no saved theme and a stub matchMedia reporting dark, the app starts with data-theme 'dark'; with matchMedia undefined it starts light"
+          - "style.css contains a [data-theme=\"dark\"] rule overriding at least the background and text colour custom properties"
+        blocked_by: [SETUP-1]
+        size: S
+
+      - id: EXTRA-5
+        title: vs Computer mode
+        description: |
+          Add a `#cpu-toggle` checkbox on setup. When checked, Player 2's name is fixed to "Computer" (`#p2-name` disabled)
+          and, whenever the computer is batting, it flips automatically: one ball every `BOOK_CRICKET_CONFIG.cpuDelayMs`
+          (default 700) via setTimeout, with `#flip-btn` disabled. The innings break and the toss still need a human
+          click. History records "Computer" as player 2's name. Pending timers are cancelled when leaving the game screen.
+        acceptance_criteria:
+          - "checking #cpu-toggle disables #p2-name and Start creates a game with player 2 named 'Computer'"
+          - "with config { cpuDelayMs: 0 } and random values giving pages 4,6,7,10 for the computer's innings 2, after awaiting 50ms the result screen shows the computer's score 10"
+          - "while the computer is batting, #flip-btn is disabled; while the human is batting it is enabled"
+          - "clicking #change-players-btn during a computer innings stops further automatic flips (no state change after awaiting 50ms with cpuDelayMs 10)"
+          - "a finished vs Computer match is saved in history with p2.name 'Computer'"
+        blocked_by: [PLAY-3]
+        size: M
