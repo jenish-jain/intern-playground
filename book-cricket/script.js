@@ -93,6 +93,16 @@ function computeResult(state) {
   return { winner, p1Score, p2Score };
 }
 
+const DUPLICATE_NAMES_ERROR = "Players must have different names";
+
+/** Trim names, default blanks to "Player 1"/"Player 2", and reject case-insensitive duplicates. */
+function normalizeNames(rawP1, rawP2) {
+  const p1 = String(rawP1 ?? "").trim() || "Player 1";
+  const p2 = String(rawP2 ?? "").trim() || "Player 2";
+  const error = p1.toLowerCase() === p2.toLowerCase() ? DUPLICATE_NAMES_ERROR : null;
+  return { p1, p2, error };
+}
+
 /** Pick the theme: a saved "light"/"dark" wins, otherwise follow the system preference. */
 function resolveTheme(savedTheme, prefersDark) {
   if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
@@ -217,8 +227,15 @@ function saveTheme(storage, theme) {
 // UI (DOM)
 // ---------------------------------------------------------------------------
 
+const NO_BALL_YET = "–";
+const SCREENS = ["setup", "toss", "game", "break", "result", "history"];
+
+let gameState = null;
+
 const ui = {
   theme: "light",
+  screen: "setup",
+  setupError: null,
 };
 
 /** True when the browser reports a dark colour-scheme preference. */
@@ -247,9 +264,88 @@ function renderTheme() {
   }
 }
 
+/** The screen to show: the game screens follow gameState.phase. */
+function currentScreen() {
+  if (ui.screen === "game" && gameState) {
+    if (gameState.phase === "break") return "break";
+    if (gameState.phase === "result") return "result";
+  }
+  return ui.screen;
+}
+
+/** Show exactly one screen section by toggling the hidden class. */
+function renderScreens(screen) {
+  for (const name of SCREENS) {
+    document.getElementById(`screen-${name}`).classList.toggle("hidden", name !== screen);
+  }
+}
+
+/** Fill the setup error message, hidden when there is none. */
+function renderSetup() {
+  const error = document.getElementById("setup-error");
+  error.textContent = ui.setupError || "";
+  error.classList.toggle("hidden", !ui.setupError);
+}
+
+/** Fill the scoreboard and ball log for the current innings. */
+function renderGame() {
+  if (!gameState) return;
+  const batter = gameState.currentBatter;
+  const ball = gameState.lastBall;
+  document.getElementById("innings-label").textContent = `Innings ${gameState.currentInnings}`;
+  document.getElementById("batter-name").textContent = gameState.players[batter];
+  document.getElementById("score").textContent = String(gameState.scores[batter]);
+  document.getElementById("balls-left").textContent = String(gameState.ballsLeft);
+  document.getElementById("last-page").textContent = ball ? String(ball.page) : NO_BALL_YET;
+  document.getElementById("last-result").textContent = ball ? ball.label : NO_BALL_YET;
+  document.getElementById("target-info").classList.toggle("hidden", gameState.currentInnings === 1);
+  const items = gameState.log[batter].map((entry, i) => {
+    const li = document.createElement("li");
+    li.textContent = `Ball ${i + 1}: Page ${entry.page} – ${entry.label}`;
+    return li;
+  });
+  document.getElementById("ball-log").replaceChildren(...items);
+}
+
+/** Fill the innings break with the first innings score and the target. */
+function renderBreak() {
+  if (!gameState || gameState.target === null) return;
+  const [first, second] = gameState.battingOrder;
+  document.getElementById("break-score").textContent =
+    `${gameState.players[first]} scored ${gameState.scores[first]}`;
+  document.getElementById("break-target").textContent =
+    `${gameState.players[second]} needs ${gameState.target} to win`;
+}
+
 /** Redraw the page from state. */
 function render() {
   renderTheme();
+  renderScreens(currentScreen());
+  renderSetup();
+  renderGame();
+  renderBreak();
+}
+
+/** Start a match from the setup form, or show the name error and stay on setup. */
+function handleStart() {
+  const names = normalizeNames(
+    document.getElementById("p1-name").value,
+    document.getElementById("p2-name").value,
+  );
+  ui.setupError = names.error;
+  if (!names.error) {
+    const ballsPerInnings = Number(document.getElementById("balls-select").value);
+    gameState = createGame({ p1: names.p1, p2: names.p2, ballsPerInnings });
+    ui.screen = "game";
+  }
+  render();
+}
+
+/** Play one ball on a random page. */
+function handleFlip() {
+  if (!gameState) return;
+  gameState = playBall(gameState, flipPage());
+  render();
 }
 
 /** Switch between light and dark and remember the choice. */
@@ -272,12 +368,14 @@ function getStorage() {
 function init() {
   ui.theme = resolveTheme(loadTheme(getStorage()), systemPrefersDark());
   document.getElementById("theme-toggle").addEventListener("click", handleThemeToggle);
+  document.getElementById("start-btn").addEventListener("click", handleStart);
+  document.getElementById("flip-btn").addEventListener("click", handleFlip);
   render();
 }
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { flipPage, resultForPage, createGame, playBall, startSecondInnings,
-                     computeResult, resolveTheme, toggleTheme, loadPlayers, savePlayers,
+                     computeResult, normalizeNames, resolveTheme, toggleTheme, loadPlayers, savePlayers,
                      loadHistory, addHistory, clearHistory, buildHistoryEntry, loadTheme,
                      saveTheme };
 }
