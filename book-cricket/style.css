@@ -78,15 +78,54 @@ button {
   color: var(--color-error);
 }
 
+#flip-btn {
+  min-height: 64px;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+#screen-game p {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+#score {
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+#batter-name,
+#balls-left,
+#target,
+#runs-needed {
+  font-weight: 700;
+}
+
+#ball-log,
+#result-log-p1,
+#result-log-p2 {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: var(--color-muted);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
 }
 
+/* Lets the history table scroll sideways instead of overflowing 320px screens. */
+.table-scroll {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 th,
 td {
-  padding: 0.25rem;
+  padding: 0.25rem 0.5rem;
   text-align: left;
+  white-space: nowrap;
   border-bottom: 1px solid var(--color-border);
 }
 
