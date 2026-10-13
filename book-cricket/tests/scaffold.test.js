@@ -39,10 +39,12 @@ test("#balls-select default is 6 via the selected option", () => {
   assert.equal(select.options[select.selectedIndex].value, "6");
 });
 
-test("require('../script.js') exports an object without touching the DOM", () => {
+test("require('../script.js') exports only functions without touching the DOM", () => {
   assert.equal(typeof document, "undefined");
   const mod = require("../script.js");
-  assert.deepEqual(Object.keys(mod), []);
+  for (const [name, value] of Object.entries(mod)) {
+    assert.equal(typeof value, "function", `${name} is a function`);
+  }
 });
 
 test("loadApp with no options leaves localStorage empty", () => {
