@@ -13,9 +13,10 @@ const script = fs.readFileSync(path.join(appDir, "script.js"), "utf8");
  * @param {number[]} [options.random] values returned by Math.random in order, then the last repeats (0.5 if empty).
  * @param {boolean} [options.confirm] value returned by window.confirm.
  * @param {object} [options.config] assigned to window.BOOK_CRICKET_CONFIG before the script runs.
+ * @param {{ dark: boolean }} [options.colorScheme] stubs window.matchMedia so "(prefers-color-scheme: dark)" matches when dark is true; omitted, matchMedia stays undefined (jsdom default).
  * @returns {{ window: Window, document: Document, click: (id: string) => void, $: (selector: string) => Element | null }}
  */
-function loadApp({ storage = {}, random = [], confirm = true, config } = {}) {
+function loadApp({ storage = {}, random = [], confirm = true, config, colorScheme } = {}) {
   const dom = new JSDOM(html, { url: "http://localhost/", runScripts: "outside-only" });
   const { window } = dom;
   const { document } = window;
@@ -36,6 +37,15 @@ function loadApp({ storage = {}, random = [], confirm = true, config } = {}) {
   window.confirm = () => confirm;
 
   if (config !== undefined) window.BOOK_CRICKET_CONFIG = config;
+
+  if (colorScheme !== undefined) {
+    window.matchMedia = (query) => ({
+      media: query,
+      matches: query === "(prefers-color-scheme: dark)" && colorScheme.dark,
+      addEventListener() {},
+      removeEventListener() {},
+    });
+  }
 
   window.eval(script);
 

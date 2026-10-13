@@ -114,7 +114,10 @@ test("colours are custom properties on :root and used via var()", () => {
   }
   for (const rule of rules) {
     if (rule.selector === ":root") continue;
+    // The dark theme redefines the colour tokens, so literals are allowed there in custom properties.
+    const themeTokens = rule.selector === '[data-theme="dark"]';
     for (const [prop, value] of declarations(rule.body)) {
+      if (themeTokens && prop.startsWith("--")) continue;
       assert.doesNotMatch(value, colourLiteral, `${rule.selector} { ${prop}: ${value} }`);
     }
   }
