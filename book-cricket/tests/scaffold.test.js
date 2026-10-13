@@ -39,10 +39,15 @@ test("#balls-select default is 6 via the selected option", () => {
   assert.equal(select.options[select.selectedIndex].value, "6");
 });
 
-test("require('../script.js') exports an object without touching the DOM", () => {
+test("require('../script.js') exports only functions without touching the DOM", () => {
   assert.equal(typeof document, "undefined");
   const mod = require("../script.js");
+  const allowed = ["flipPage", "resultForPage", "createGame", "playBall", "startSecondInnings",
+    "computeResult", "normalizeNames", "loadPlayers", "savePlayers", "loadHistory",
+    "addHistory", "clearHistory", "buildHistoryEntry", "resolveTheme", "toggleTheme",
+    "loadTheme", "saveTheme"];
   for (const [name, value] of Object.entries(mod)) {
+    assert.ok(allowed.includes(name), `${name} is a documented export`);
     assert.equal(typeof value, "function", `${name} is a function`);
   }
 });

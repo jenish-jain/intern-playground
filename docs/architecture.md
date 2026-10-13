@@ -126,4 +126,4 @@ Before the first ball of an innings, `#last-page` and `#last-result` show `–`.
 
 ## Styling
 
-Mobile-first CSS; `<meta name="viewport" content="width=device-width, initial-scale=1">`; a single centred column with `max-width: 480px` on wide screens; tap targets ≥ 48 px high; `.hidden { display: none !important; }`. Theme colours as CSS custom properties on `:root` so dark mode can override them via `[data-theme="dark"]`.
+Mobile-first CSS; `<meta name="viewport" content="width=device-width, initial-scale=1">`; a single centred column with `max-width: 480px` on wide screens; tap targets ≥ 48 px high (the Flip button larger still); `.hidden { display: none !important; }`. The history `<table>` carries the class `table-scroll` (`display: block; overflow-x: auto`) so it scrolls sideways instead of overflowing 320 px screens. Width declarations above 480 px only inside `@media (min-width: ...)` blocks. Theme colours as CSS custom properties on `:root` so dark mode can override them via `[data-theme="dark"]`.
