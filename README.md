@@ -41,4 +41,21 @@ Run tests using `go test ./...`
 ## Dependencies
 - github.com/spf13/cobra: Command line interface library
 
+# Book Cricket
+
+A two-player browser game in `book-cricket/`, unrelated to the Go CLI. It is plain HTML, CSS and JavaScript with no build step and no runtime dependencies. See `docs/PRD.md` and `docs/architecture.md`.
+
+## Run
+Open `book-cricket/index.html` in a browser, or serve it with `npx serve book-cricket` from the repository root.
+
+## Test
+Requires Node.js 20 or later (used for tests only):
+
+```sh
+npm ci --prefix book-cricket
+npm test --prefix book-cricket
+```
+
+CI runs the same steps on every push and pull request (`.github/workflows/book-cricket.yml`).
+
 Note: This README should be updated as new features are added or significant changes are made to the project structure.

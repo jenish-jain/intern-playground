@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Book Cricket</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <h1>Book Cricket</h1>
+
+    <section id="screen-setup">
+      <h2>New match</h2>
+      <label for="p1-name">Player 1</label>
+      <input id="p1-name" type="text" maxlength="20" autocomplete="off">
+      <label for="p2-name">Player 2</label>
+      <input id="p2-name" type="text" maxlength="20" autocomplete="off">
+      <label for="balls-select">Balls per innings</label>
+      <select id="balls-select">
+        <option value="6" selected>6</option>
+        <option value="12">12</option>
+        <option value="18">18</option>
+      </select>
+      <label class="checkbox"><input id="toss-toggle" type="checkbox"> Toss for who bats first</label>
+      <p id="setup-error" class="error hidden" role="alert"></p>
+      <button id="start-btn" type="button">Start</button>
+      <button id="setup-history-btn" type="button">History</button>
+    </section>
+
+    <section id="screen-toss" class="hidden">
+      <h2>Toss</h2>
+      <p id="toss-result"></p>
+      <button id="toss-continue-btn" type="button">Continue</button>
+    </section>
+
+    <section id="screen-game" class="hidden">
+      <h2 id="innings-label"></h2>
+      <p>Batting: <span id="batter-name"></span></p>
+      <p>Score: <span id="score"></span></p>
+      <p>Balls left: <span id="balls-left"></span></p>
+      <p>Page: <span id="last-page"></span></p>
+      <p>Result: <span id="last-result"></span></p>
+      <p id="target-info" class="hidden">Target: <span id="target"></span>, runs needed: <span id="runs-needed"></span></p>
+      <button id="flip-btn" type="button">Flip</button>
+      <ol id="ball-log"></ol>
+    </section>
+
+    <section id="screen-break" class="hidden">
+      <h2>Innings break</h2>
+      <p id="break-score"></p>
+      <p id="break-target"></p>
+      <button id="break-continue-btn" type="button">Start innings 2</button>
+    </section>
+
+    <section id="screen-result" class="hidden">
+      <h2 id="result-banner"></h2>
+      <p>Player 1: <span id="result-p1-score"></span></p>
+      <p>Player 2: <span id="result-p2-score"></span></p>
+      <ol id="result-log-p1"></ol>
+      <ol id="result-log-p2"></ol>
+      <button id="play-again-btn" type="button">Play again</button>
+      <button id="change-players-btn" type="button">Change players</button>
+      <button id="view-history-btn" type="button">History</button>
+    </section>
+
+    <section id="screen-history" class="hidden">
+      <h2>Match history</h2>
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Player 1</th><th>Player 2</th><th>Winner</th><th>Balls</th></tr>
+        </thead>
+        <tbody id="history-table"></tbody>
+      </table>
+      <p id="history-empty">No matches yet.</p>
+      <button id="reset-history-btn" type="button">Reset history</button>
+      <button id="history-back-btn" type="button">Back</button>
+    </section>
+  </main>
+  <script src="script.js" defer></script>
+</body>
+</html>
