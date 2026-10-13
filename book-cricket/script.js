@@ -23,6 +23,76 @@ function resultForPage(page) {
   return { page, digit, runs, out, label };
 }
 
+/** New game state in phase "innings", innings 1, with `firstBatter` batting. */
+function createGame({ p1, p2, ballsPerInnings, firstBatter = "p1" }) {
+  const secondBatter = firstBatter === "p1" ? "p2" : "p1";
+  return {
+    phase: "innings",
+    players: { p1, p2 },
+    ballsPerInnings,
+    battingOrder: [firstBatter, secondBatter],
+    currentInnings: 1,
+    currentBatter: firstBatter,
+    scores: { p1: 0, p2: 0 },
+    ballsLeft: ballsPerInnings,
+    target: null,
+    out: { p1: false, p2: false },
+    log: { p1: [], p2: [] },
+    lastBall: null,
+    result: null,
+  };
+}
+
+/** New state after one ball on `page`; returns the input unchanged unless phase is "innings". */
+function playBall(state, page) {
+  if (state.phase !== "innings") return state;
+  const batter = state.currentBatter;
+  const ball = resultForPage(page);
+  const score = state.scores[batter] + ball.runs;
+  const next = {
+    ...state,
+    scores: { ...state.scores, [batter]: score },
+    ballsLeft: state.ballsLeft - 1,
+    out: { ...state.out, [batter]: state.out[batter] || ball.out },
+    log: { ...state.log, [batter]: [...state.log[batter], ball] },
+    lastBall: ball,
+  };
+  const inningsOver = ball.out || next.ballsLeft === 0;
+  if (state.currentInnings === 1) {
+    if (inningsOver) {
+      next.phase = "break";
+      next.target = score + 1;
+    }
+  } else if (inningsOver || score >= state.target) {
+    next.phase = "result";
+    next.result = computeResult(next);
+  }
+  return next;
+}
+
+/** State for innings 2 from a "break" state; returns the input unchanged otherwise. */
+function startSecondInnings(state) {
+  if (state.phase !== "break") return state;
+  return {
+    ...state,
+    phase: "innings",
+    currentInnings: 2,
+    currentBatter: state.battingOrder[1],
+    ballsLeft: state.ballsPerInnings,
+    lastBall: null,
+  };
+}
+
+/** Match result from the scores: `{ winner: "p1" | "p2" | null, p1Score, p2Score }` (null is a tie). */
+function computeResult(state) {
+  const p1Score = state.scores.p1;
+  const p2Score = state.scores.p2;
+  let winner = null;
+  if (p1Score > p2Score) winner = "p1";
+  else if (p2Score > p1Score) winner = "p2";
+  return { winner, p1Score, p2Score };
+}
+
 /** Pick the theme: a saved "light"/"dark" wins, otherwise follow the system preference. */
 function resolveTheme(savedTheme, prefersDark) {
   if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
@@ -206,8 +276,9 @@ function init() {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { flipPage, resultForPage, resolveTheme, toggleTheme,
-                     loadPlayers, savePlayers, loadHistory, addHistory, clearHistory,
-                     buildHistoryEntry, loadTheme, saveTheme };
+  module.exports = { flipPage, resultForPage, createGame, playBall, startSecondInnings,
+                     computeResult, resolveTheme, toggleTheme, loadPlayers, savePlayers,
+                     loadHistory, addHistory, clearHistory, buildHistoryEntry, loadTheme,
+                     saveTheme };
 }
 if (typeof document !== "undefined") init();
