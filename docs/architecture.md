@@ -36,6 +36,7 @@ One file, organised in three layers, top to bottom. Lower layers never touch the
    - `loadHistory(storage)` → array (`[]` if missing, corrupt or not an array)
    - `addHistory(storage, entry)` → prepends, keeps at most 10, returns new array
    - `clearHistory(storage)`
+   - `loadTheme(storage)` → `"light" | "dark" | null` / `saveTheme(storage, theme)` (pure helpers `resolveTheme(saved, prefersDark)` and `toggleTheme(theme)` live in the logic section)
    - `buildHistoryEntry(state, date = new Date())` → entry in the PRD shape
    - `storage` is passed in (defaults to `window.localStorage` at the UI layer) so tests can use fakes, including one whose methods throw.
 3. **UI (DOM)**
@@ -89,6 +90,7 @@ UI screens (`ui.screen`): `"setup" | "toss" | "game" | "break" | "result" | "his
 
 | Screen section | Elements |
 |---|---|
+| header (outside the screens, always visible) | `#theme-toggle` (button; text "Dark mode"/"Light mode", `aria-pressed` reflects dark) |
 | `#screen-setup` | `#p1-name`, `#p2-name` (text, `maxlength="20"`), `#balls-select` (`<select>` with values 6, 12, 18; 6 selected), `#toss-toggle` (checkbox), `#start-btn`, `#setup-error` (hidden unless error), `#setup-history-btn` |
 | `#screen-toss` | `#toss-result`, `#toss-continue-btn` |
 | `#screen-game` | `#innings-label` ("Innings 1"/"Innings 2"), `#batter-name`, `#score`, `#balls-left`, `#last-page`, `#last-result`, `#target-info` (hidden in innings 1; contains `#target` and `#runs-needed`), `#flip-btn`, `#ball-log` (`<ol>`, one `<li>` per ball) |
@@ -109,6 +111,7 @@ Before the first ball of an innings, `#last-page` and `#last-result` show `–`.
 
 - Keys: `bookCricket.players`, `bookCricket.history` (MVP); `bookCricket.tally`, `bookCricket.theme`, `bookCricket.muted` (EXTRA).
 - All reads: `JSON.parse` inside try/catch; any error or wrong shape → default value. All writes: try/catch, failures ignored (the game keeps working).
+- `bookCricket.theme` holds `"light"` or `"dark"` (JSON-encoded, like every key), saved on each `#theme-toggle` click. On load: saved theme if valid, otherwise `matchMedia("(prefers-color-scheme: dark)")` when available, otherwise light. Dark sets `data-theme="dark"` on `<html>`; light removes the attribute.
 - Names saved on a successful Start. History entry saved once, when a match reaches phase `"result"`.
 
 ## Testing
@@ -116,8 +119,8 @@ Before the first ball of an innings, `#last-page` and `#last-result` show `–`.
 - `node --test` (built-in runner, Node ≥ 20) run from `book-cricket/`; test files `tests/*.test.js`, CommonJS.
 - Unit tests `require("../script.js")` and pass explicit `rng`/`page` values and fake storage objects.
 - DOM tests use `tests/helpers/app.js`:
-  `loadApp({ storage = {}, random = [] , confirm = true })` → `{ window, document, click(id), $(selector) }`.
-  It creates a `JSDOM` from `index.html` with `url: "http://localhost/"` and `runScripts: "outside-only"`, seeds `window.localStorage` from `storage` (values JSON-stringified), replaces `window.Math.random` with a function returning the given values in order (then repeating the last, or 0.5 if empty), stubs `window.confirm`, then evaluates `script.js` with `window.eval`.
+  `loadApp({ storage = {}, random = [] , confirm = true, config, colorScheme })` → `{ window, document, click(id), $(selector) }`.
+  It creates a `JSDOM` from `index.html` with `url: "http://localhost/"` and `runScripts: "outside-only"`, seeds `window.localStorage` from `storage` (values JSON-stringified), replaces `window.Math.random` with a function returning the given values in order (then repeating the last, or 0.5 if empty), stubs `window.confirm`, sets `window.BOOK_CRICKET_CONFIG` from `config`, stubs `window.matchMedia` from `colorScheme` (`{ dark: true }` makes `(prefers-color-scheme: dark)` match; omitted leaves it undefined), then evaluates `script.js` with `window.eval`.
   Page from a random value `r`: `Math.floor(r * 200) + 1`, so `r = (page - 0.5) / 200` yields `page`.
 - No real timers or network in tests. Animation and computer delays are configurable through `window.BOOK_CRICKET_CONFIG` (`{ animationMs, cpuDelayMs }`, defaults 600 and 700) so tests can set them to 0.
 

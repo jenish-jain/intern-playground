@@ -9,6 +9,18 @@
   --color-error: #c62828;
 }
 
+[data-theme="dark"] {
+  --color-bg: #121a14;
+  --color-surface: #1c261e;
+  --color-text: #e3ebe2;
+  --color-muted: #9fb0a2;
+  --color-primary: #66bb6a;
+  --color-primary-text: #0d1a0f;
+  --color-border: #34433a;
+  --color-error: #ef9a9a;
+  color-scheme: dark;
+}
+
 *,
 *::before,
 *::after {
@@ -31,6 +43,17 @@ body {
   max-width: 480px;
   margin: 0 auto;
   padding: 1rem;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.app-header h1 {
+  margin: 0;
 }
 
 section {
@@ -56,6 +79,8 @@ select {
   padding: 0 0.75rem;
   border: 1px solid var(--color-border);
   border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 button {
