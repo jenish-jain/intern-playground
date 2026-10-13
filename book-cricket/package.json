@@ -1,0 +1,15 @@
+{
+  "name": "book-cricket",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Book Cricket: a two-player browser game",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
+}
