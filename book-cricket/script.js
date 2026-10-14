@@ -243,6 +243,7 @@ const ui = {
   screen: "setup",
   setupError: null,
   pendingNames: null,
+  previousScreen: "setup",
   pendingGame: null,
   flipping: false,
 };
@@ -375,6 +376,43 @@ function renderResult() {
   document.getElementById("result-log-p2").replaceChildren(...logItems(gameState.log.p2));
 }
 
+/** Two-digit zero-padded number. */
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+/** Local `YYYY-MM-DD HH:MM` for an ISO date string; the raw value if it is not a valid date. */
+function formatHistoryDate(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso ?? "");
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/** One history `<tr>` with Date, Player 1, Player 2, Winner and Balls cells. */
+function historyRow(entry) {
+  const tr = document.createElement("tr");
+  const cells = [
+    formatHistoryDate(entry.date),
+    `${entry.p1.name} (${entry.p1.score})`,
+    `${entry.p2.name} (${entry.p2.score})`,
+    entry.winner === null || entry.winner === undefined ? "Tie" : String(entry.winner),
+    String(entry.ballsPerInnings),
+  ];
+  for (const text of cells) {
+    const td = document.createElement("td");
+    td.textContent = text;
+    tr.appendChild(td);
+  }
+  return tr;
+}
+
+/** Fill the history table from storage and toggle the empty message. */
+function renderHistory() {
+  const entries = loadHistory(getStorage()).filter((entry) => entry && entry.p1 && entry.p2);
+  document.getElementById("history-table").replaceChildren(...entries.map(historyRow));
+  document.getElementById("history-empty").classList.toggle("hidden", entries.length > 0);
+}
+
 /** Redraw the page from state. */
 function render() {
   renderTheme();
@@ -385,6 +423,7 @@ function render() {
   renderBook();
   renderBreak();
   renderResult();
+  renderHistory();
 }
 
 /** Start a match from the setup form (via the toss screen when the toss is on), or show the name error. */
@@ -397,6 +436,7 @@ function handleStart() {
   if (!names.error) {
     const ballsPerInnings = Number(document.getElementById("balls-select").value);
     const settings = { p1: names.p1, p2: names.p2, ballsPerInnings };
+    savePlayers(getStorage(), { p1: names.p1, p2: names.p2 });
     if (document.getElementById("toss-toggle").checked) {
       ui.pendingGame = { ...settings, firstBatter: tossWinner() };
       ui.screen = "toss";
@@ -421,7 +461,11 @@ function handleTossContinue() {
 function handleFlip() {
   if (!gameState || ui.flipping) return;
   const applyBall = () => {
+    const wasFinished = gameState.phase === "result";
     gameState = playBall(gameState, flipPage());
+    if (!wasFinished && gameState.phase === "result") {
+      addHistory(getStorage(), buildHistoryEntry(gameState));
+    }
     ui.flipping = false;
     render();
   };
@@ -459,6 +503,26 @@ function handleChangePlayers() {
   render();
 }
 
+/** Open the history screen, remembering the screen to return to. */
+function handleHistoryOpen() {
+  ui.previousScreen = currentScreen();
+  ui.screen = "history";
+  render();
+}
+
+/** Return from history to the screen it was opened from. */
+function handleHistoryBack() {
+  ui.screen = ui.previousScreen === "result" ? "game" : ui.previousScreen;
+  render();
+}
+
+/** Clear all saved history after confirmation. */
+function handleHistoryReset() {
+  if (!window.confirm("Clear all match history?")) return;
+  clearHistory(getStorage());
+  render();
+}
+
 /** Switch between light and dark and remember the choice. */
 function handleThemeToggle() {
   ui.theme = toggleTheme(ui.theme);
@@ -475,9 +539,18 @@ function getStorage() {
   }
 }
 
+/** Pre-fill the setup name inputs from the saved players, if any. */
+function prefillPlayers() {
+  const saved = loadPlayers(getStorage());
+  if (!saved) return;
+  document.getElementById("p1-name").value = saved.p1;
+  document.getElementById("p2-name").value = saved.p2;
+}
+
 /** Wire up the page. */
 function init() {
   ui.theme = resolveTheme(loadTheme(getStorage()), systemPrefersDark());
+  prefillPlayers();
   document.getElementById("theme-toggle").addEventListener("click", handleThemeToggle);
   document.getElementById("start-btn").addEventListener("click", handleStart);
   document.getElementById("toss-continue-btn").addEventListener("click", handleTossContinue);
@@ -485,6 +558,10 @@ function init() {
   document.getElementById("break-continue-btn").addEventListener("click", handleBreakContinue);
   document.getElementById("play-again-btn").addEventListener("click", handlePlayAgain);
   document.getElementById("change-players-btn").addEventListener("click", handleChangePlayers);
+  document.getElementById("view-history-btn").addEventListener("click", handleHistoryOpen);
+  document.getElementById("setup-history-btn").addEventListener("click", handleHistoryOpen);
+  document.getElementById("history-back-btn").addEventListener("click", handleHistoryBack);
+  document.getElementById("reset-history-btn").addEventListener("click", handleHistoryReset);
   render();
 }
 

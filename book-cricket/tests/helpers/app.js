@@ -10,19 +10,23 @@ const script = fs.readFileSync(path.join(appDir, "script.js"), "utf8");
  * Boot index.html in jsdom and evaluate script.js.
  * @param {object} [options]
  * @param {object} [options.storage] localStorage seed; each value is JSON-stringified.
+ * @param {Object<string, string>} [options.rawStorage] localStorage seed stored as-is (e.g. invalid JSON); applied after `storage`.
  * @param {number[]} [options.random] values returned by Math.random in order, then the last repeats (0.5 if empty).
  * @param {boolean} [options.confirm] value returned by window.confirm.
  * @param {object} [options.config] assigned to window.BOOK_CRICKET_CONFIG before the script runs.
  * @param {{ dark: boolean }} [options.colorScheme] stubs window.matchMedia so "(prefers-color-scheme: dark)" matches when dark is true; omitted, matchMedia stays undefined (jsdom default).
  * @returns {{ window: Window, document: Document, click: (id: string) => void, $: (selector: string) => Element | null }}
  */
-function loadApp({ storage = {}, random = [], confirm = true, config, colorScheme } = {}) {
+function loadApp({ storage = {}, rawStorage = {}, random = [], confirm = true, config, colorScheme } = {}) {
   const dom = new JSDOM(html, { url: "http://localhost/", runScripts: "outside-only" });
   const { window } = dom;
   const { document } = window;
 
   for (const [key, value] of Object.entries(storage)) {
     window.localStorage.setItem(key, JSON.stringify(value));
+  }
+  for (const [key, value] of Object.entries(rawStorage)) {
+    window.localStorage.setItem(key, value);
   }
 
   const values = random.slice();
