@@ -10,6 +10,11 @@ function flipPage(rng = Math.random) {
   return Math.floor(rng() * PAGE_COUNT) + 1;
 }
 
+/** Coin toss for batting order: "p1" when rng() < 0.5, otherwise "p2". */
+function tossWinner(rng = Math.random) {
+  return rng() < 0.5 ? "p1" : "p2";
+}
+
 /** Describe the ball scored by a page from its last digit. */
 function resultForPage(page) {
   const digit = page % 10;
@@ -237,6 +242,7 @@ const ui = {
   screen: "setup",
   setupError: null,
   pendingNames: null,
+  pendingGame: null,
 };
 
 /** True when the browser reports a dark colour-scheme preference. */
@@ -291,6 +297,14 @@ function renderSetup() {
     document.getElementById("p2-name").value = ui.pendingNames.p2;
     ui.pendingNames = null;
   }
+}
+
+/** Fill the toss result from the pending game, if any. */
+function renderToss() {
+  const pending = ui.pendingGame;
+  if (!pending) return;
+  document.getElementById("toss-result").textContent =
+    `${pending[pending.firstBatter]} won the toss and bats first`;
 }
 
 /** Ball log `<li>` items in the "Ball n: Page p – label" format. */
@@ -349,12 +363,13 @@ function render() {
   renderTheme();
   renderScreens(currentScreen());
   renderSetup();
+  renderToss();
   renderGame();
   renderBreak();
   renderResult();
 }
 
-/** Start a match from the setup form, or show the name error and stay on setup. */
+/** Start a match from the setup form (via the toss screen when the toss is on), or show the name error. */
 function handleStart() {
   const names = normalizeNames(
     document.getElementById("p1-name").value,
@@ -363,9 +378,24 @@ function handleStart() {
   ui.setupError = names.error;
   if (!names.error) {
     const ballsPerInnings = Number(document.getElementById("balls-select").value);
-    gameState = createGame({ p1: names.p1, p2: names.p2, ballsPerInnings });
-    ui.screen = "game";
+    const settings = { p1: names.p1, p2: names.p2, ballsPerInnings };
+    if (document.getElementById("toss-toggle").checked) {
+      ui.pendingGame = { ...settings, firstBatter: tossWinner() };
+      ui.screen = "toss";
+    } else {
+      gameState = createGame(settings);
+      ui.screen = "game";
+    }
   }
+  render();
+}
+
+/** Start the match with the batting order decided by the toss. */
+function handleTossContinue() {
+  if (!ui.pendingGame) return;
+  gameState = createGame(ui.pendingGame);
+  ui.pendingGame = null;
+  ui.screen = "game";
   render();
 }
 
@@ -421,6 +451,7 @@ function init() {
   ui.theme = resolveTheme(loadTheme(getStorage()), systemPrefersDark());
   document.getElementById("theme-toggle").addEventListener("click", handleThemeToggle);
   document.getElementById("start-btn").addEventListener("click", handleStart);
+  document.getElementById("toss-continue-btn").addEventListener("click", handleTossContinue);
   document.getElementById("flip-btn").addEventListener("click", handleFlip);
   document.getElementById("break-continue-btn").addEventListener("click", handleBreakContinue);
   document.getElementById("play-again-btn").addEventListener("click", handlePlayAgain);
@@ -429,7 +460,7 @@ function init() {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { flipPage, resultForPage, createGame, playBall, startSecondInnings,
+  module.exports = { flipPage, tossWinner, resultForPage, createGame, playBall, startSecondInnings,
                      computeResult, normalizeNames, resolveTheme, toggleTheme, loadPlayers, savePlayers,
                      loadHistory, addHistory, clearHistory, buildHistoryEntry, loadTheme,
                      saveTheme };
