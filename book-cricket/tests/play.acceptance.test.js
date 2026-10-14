@@ -82,10 +82,10 @@ test("AC: Asha/Ravi with 12 balls shows a fresh innings 1 scoreboard", () => {
   assert.ok($("#target-info").classList.contains("hidden"));
 });
 
-test("toss checkbox is ignored: Player 1 bats first and game screen shows", () => {
+test("toss checkbox checked: Start shows the toss screen instead of the game (IP-6)", () => {
   const { document, $ } = start({ toss: true, pages: [1] });
-  assert.deepEqual(visible(document), ["screen-game"]);
-  assert.equal($("#batter-name").textContent, "Asha");
+  assert.deepEqual(visible(document), ["screen-toss"]);
+  assert.equal($("#toss-result").textContent, "Asha won the toss and bats first");
 });
 
 test("AC: loadApp({ random: [(147-0.5)/200] }) one flip shows page 147 dot ball", () => {

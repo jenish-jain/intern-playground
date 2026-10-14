@@ -25,6 +25,7 @@ One file, organised in three layers, top to bottom. Lower layers never touch the
 
 1. **Game logic (pure functions, no DOM, no storage)**
    - `flipPage(rng = Math.random)` → integer 1–200: `Math.floor(rng() * 200) + 1`.
+   - `tossWinner(rng = Math.random)` → `"p1"` when `rng() < 0.5`, otherwise `"p2"`. With `#toss-toggle` checked, Start consumes one `Math.random()` value for the toss, shows `#screen-toss`, and `#toss-continue-btn` starts `createGame({ ..., firstBatter })`. Play Again reuses `battingOrder[0]` without a new toss.
    - `resultForPage(page)` → `{ page, digit, runs, out, label }` where `digit = page % 10`; labels: `"1 run"`, `"2 runs"` … `"6 runs"`, `"Dot ball"`, `"OUT"`.
    - `createGame({ p1, p2, ballsPerInnings, firstBatter = "p1" })` → new game state in phase `"innings"`, innings 1.
    - `playBall(state, page)` → **new** state (never mutates input) after one ball; handles innings end and match end.
@@ -49,7 +50,7 @@ One file, organised in three layers, top to bottom. Lower layers never touch the
 ```js
 // bottom of script.js
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { flipPage, resultForPage, createGame, playBall, startSecondInnings,
+  module.exports = { flipPage, tossWinner, resultForPage, createGame, playBall, startSecondInnings,
                      computeResult, normalizeNames, loadPlayers, savePlayers, loadHistory,
                      addHistory, clearHistory, buildHistoryEntry };
 }
