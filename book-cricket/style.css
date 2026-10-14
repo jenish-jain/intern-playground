@@ -7,6 +7,7 @@
   --color-primary-text: #ffffff;
   --color-border: #d0d8cf;
   --color-error: #c62828;
+  --flip-duration: 600ms;
 }
 
 [data-theme="dark"] {
@@ -101,6 +102,45 @@ button {
 
 .error {
   color: var(--color-error);
+}
+
+/* Book graphic: a cover with one page that turns over while a ball is pending. */
+.book {
+  position: relative;
+  height: 120px;
+  perspective: 800px;
+  border-radius: 6px;
+  background: var(--color-primary);
+}
+
+.book-page {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  bottom: 6px;
+  left: 6px;
+  background: var(--color-surface);
+  border-radius: 0 4px 4px 0;
+  transform-origin: left center;
+}
+
+.book.flipping .book-page {
+  animation: page-flip var(--flip-duration) ease-in-out forwards;
+}
+
+@keyframes page-flip {
+  from {
+    transform: rotateY(0deg);
+  }
+  to {
+    transform: rotateY(-180deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .book.flipping .book-page {
+    animation: none;
+  }
 }
 
 #flip-btn {
