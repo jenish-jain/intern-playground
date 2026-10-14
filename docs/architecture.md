@@ -94,7 +94,7 @@ UI screens (`ui.screen`): `"setup" | "toss" | "game" | "break" | "result" | "his
 | header (outside the screens, always visible) | `#theme-toggle` (button; text "Dark mode"/"Light mode", `aria-pressed` reflects dark) |
 | `#screen-setup` | `#p1-name`, `#p2-name` (text, `maxlength="20"`), `#balls-select` (`<select>` with values 6, 12, 18; 6 selected), `#toss-toggle` (checkbox), `#start-btn`, `#setup-error` (hidden unless error), `#setup-history-btn` |
 | `#screen-toss` | `#toss-result`, `#toss-continue-btn` |
-| `#screen-game` | `#innings-label` ("Innings 1"/"Innings 2"), `#batter-name`, `#score`, `#balls-left`, `#last-page`, `#last-result`, `#target-info` (hidden in innings 1; contains `#target` and `#runs-needed`), `#flip-btn`, `#ball-log` (`<ol>`, one `<li>` per ball) |
+| `#screen-game` | `#innings-label` ("Innings 1"/"Innings 2"), `#batter-name`, `#score`, `#balls-left`, `#last-page`, `#last-result`, `#target-info` (hidden in innings 1; contains `#target` and `#runs-needed`), `#book` (decorative `<div>` with `aria-hidden`; gets class `flipping` while a ball is pending), `#flip-btn` (disabled while `#book` is `flipping`), `#ball-log` (`<ol>`, one `<li>` per ball) |
 | `#screen-break` | `#break-score`, `#break-target`, `#break-continue-btn` |
 | `#screen-result` | `#result-banner`, `#result-p1-score`, `#result-p2-score`, `#result-log-p1`, `#result-log-p2` (`<ol>`), `#play-again-btn`, `#change-players-btn`, `#view-history-btn` |
 | `#screen-history` | `#history-table` (`<tbody>` rows: Date, Player 1, Player 2, Winner, Balls), `#history-empty` (shown when no matches), `#reset-history-btn`, `#history-back-btn` |
@@ -128,3 +128,5 @@ Before the first ball of an innings, `#last-page` and `#last-result` show `–`.
 ## Styling
 
 Mobile-first CSS; `<meta name="viewport" content="width=device-width, initial-scale=1">`; a single centred column with `max-width: 480px` on wide screens; tap targets ≥ 48 px high (the Flip button larger still); `.hidden { display: none !important; }`. The history `<table>` carries the class `table-scroll` (`display: block; overflow-x: auto`) so it scrolls sideways instead of overflowing 320 px screens. Width declarations above 480 px only inside `@media (min-width: ...)` blocks. Theme colours as CSS custom properties on `:root` so dark mode can override them via `[data-theme="dark"]`.
+
+Page-flip animation: on Flip, `#book` gets `flipping` and `#flip-btn` is disabled; the ball is applied after `animationMs` (`window.BOOK_CRICKET_CONFIG`, default 600; 0 applies it at once). The `--flip-duration` custom property is set from `animationMs` on `#book`. `@media (prefers-reduced-motion: reduce)` turns the page animation off; the ball is still applied after the delay.

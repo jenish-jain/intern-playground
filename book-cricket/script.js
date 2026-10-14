@@ -234,6 +234,7 @@ function saveTheme(storage, theme) {
 
 const NO_BALL_YET = "–";
 const SCREENS = ["setup", "toss", "game", "break", "result", "history"];
+const DEFAULT_ANIMATION_MS = 600;
 
 let gameState = null;
 
@@ -243,7 +244,15 @@ const ui = {
   setupError: null,
   pendingNames: null,
   pendingGame: null,
+  flipping: false,
 };
+
+/** Page-flip duration from window.BOOK_CRICKET_CONFIG.animationMs (default 600; 0 disables the wait). */
+function animationMs() {
+  const config = window.BOOK_CRICKET_CONFIG;
+  const value = config ? config.animationMs : undefined;
+  return typeof value === "number" && value >= 0 ? value : DEFAULT_ANIMATION_MS;
+}
 
 /** True when the browser reports a dark colour-scheme preference. */
 function systemPrefersDark() {
@@ -336,6 +345,14 @@ function renderGame() {
   document.getElementById("ball-log").replaceChildren(...logItems(gameState.log[batter]));
 }
 
+/** Show the book flip while a ball is pending and lock the Flip button. */
+function renderBook() {
+  const book = document.getElementById("book");
+  book.classList.toggle("flipping", ui.flipping);
+  book.style.setProperty("--flip-duration", `${animationMs()}ms`);
+  document.getElementById("flip-btn").disabled = ui.flipping;
+}
+
 /** Fill the innings break with the first innings score and the target. */
 function renderBreak() {
   if (!gameState || gameState.target === null) return;
@@ -365,6 +382,7 @@ function render() {
   renderSetup();
   renderToss();
   renderGame();
+  renderBook();
   renderBreak();
   renderResult();
 }
@@ -399,11 +417,22 @@ function handleTossContinue() {
   render();
 }
 
-/** Play one ball on a random page. */
+/** Play one ball on a random page, after the page-flip animation (applied at once when animationMs is 0). */
 function handleFlip() {
-  if (!gameState) return;
-  gameState = playBall(gameState, flipPage());
-  render();
+  if (!gameState || ui.flipping) return;
+  const applyBall = () => {
+    gameState = playBall(gameState, flipPage());
+    ui.flipping = false;
+    render();
+  };
+  const delay = animationMs();
+  if (delay > 0) {
+    ui.flipping = true;
+    render();
+    setTimeout(applyBall, delay);
+  } else {
+    applyBall();
+  }
 }
 
 /** Begin the second innings from the break. */
