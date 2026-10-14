@@ -10,6 +10,11 @@ function flipPage(rng = Math.random) {
   return Math.floor(rng() * PAGE_COUNT) + 1;
 }
 
+/** Coin toss for batting order: "p1" when rng() < 0.5, otherwise "p2". */
+function tossWinner(rng = Math.random) {
+  return rng() < 0.5 ? "p1" : "p2";
+}
+
 /** Describe the ball scored by a page from its last digit. */
 function resultForPage(page) {
   const digit = page % 10;
@@ -236,6 +241,8 @@ const ui = {
   theme: "light",
   screen: "setup",
   setupError: null,
+  pendingNames: null,
+  pendingGame: null,
 };
 
 /** True when the browser reports a dark colour-scheme preference. */
@@ -285,6 +292,28 @@ function renderSetup() {
   const error = document.getElementById("setup-error");
   error.textContent = ui.setupError || "";
   error.classList.toggle("hidden", !ui.setupError);
+  if (ui.pendingNames) {
+    document.getElementById("p1-name").value = ui.pendingNames.p1;
+    document.getElementById("p2-name").value = ui.pendingNames.p2;
+    ui.pendingNames = null;
+  }
+}
+
+/** Fill the toss result from the pending game, if any. */
+function renderToss() {
+  const pending = ui.pendingGame;
+  if (!pending) return;
+  document.getElementById("toss-result").textContent =
+    `${pending[pending.firstBatter]} won the toss and bats first`;
+}
+
+/** Ball log `<li>` items in the "Ball n: Page p – label" format. */
+function logItems(entries) {
+  return entries.map((entry, i) => {
+    const li = document.createElement("li");
+    li.textContent = `Ball ${i + 1}: Page ${entry.page} – ${entry.label}`;
+    return li;
+  });
 }
 
 /** Fill the scoreboard and ball log for the current innings. */
@@ -299,12 +328,12 @@ function renderGame() {
   document.getElementById("last-page").textContent = ball ? String(ball.page) : NO_BALL_YET;
   document.getElementById("last-result").textContent = ball ? ball.label : NO_BALL_YET;
   document.getElementById("target-info").classList.toggle("hidden", gameState.currentInnings === 1);
-  const items = gameState.log[batter].map((entry, i) => {
-    const li = document.createElement("li");
-    li.textContent = `Ball ${i + 1}: Page ${entry.page} – ${entry.label}`;
-    return li;
-  });
-  document.getElementById("ball-log").replaceChildren(...items);
+  if (gameState.target !== null) {
+    const needed = Math.max(gameState.target - gameState.scores[batter], 0);
+    document.getElementById("target").textContent = String(gameState.target);
+    document.getElementById("runs-needed").textContent = String(needed);
+  }
+  document.getElementById("ball-log").replaceChildren(...logItems(gameState.log[batter]));
 }
 
 /** Fill the innings break with the first innings score and the target. */
@@ -317,16 +346,30 @@ function renderBreak() {
     `${gameState.players[second]} needs ${gameState.target} to win`;
 }
 
+/** Fill the result screen: banner, both totals and both ball logs. */
+function renderResult() {
+  if (!gameState || !gameState.result) return;
+  const { winner, p1Score, p2Score } = gameState.result;
+  document.getElementById("result-banner").textContent =
+    winner ? `${gameState.players[winner]} wins!` : "It's a tie!";
+  document.getElementById("result-p1-score").textContent = String(p1Score);
+  document.getElementById("result-p2-score").textContent = String(p2Score);
+  document.getElementById("result-log-p1").replaceChildren(...logItems(gameState.log.p1));
+  document.getElementById("result-log-p2").replaceChildren(...logItems(gameState.log.p2));
+}
+
 /** Redraw the page from state. */
 function render() {
   renderTheme();
   renderScreens(currentScreen());
   renderSetup();
+  renderToss();
   renderGame();
   renderBreak();
+  renderResult();
 }
 
-/** Start a match from the setup form, or show the name error and stay on setup. */
+/** Start a match from the setup form (via the toss screen when the toss is on), or show the name error. */
 function handleStart() {
   const names = normalizeNames(
     document.getElementById("p1-name").value,
@@ -335,10 +378,24 @@ function handleStart() {
   ui.setupError = names.error;
   if (!names.error) {
     const ballsPerInnings = Number(document.getElementById("balls-select").value);
-    gameState = createGame({ p1: names.p1, p2: names.p2, ballsPerInnings });
-    savePlayers(getStorage(), { p1: names.p1, p2: names.p2 });
-    ui.screen = "game";
+    const settings = { p1: names.p1, p2: names.p2, ballsPerInnings };
+    if (document.getElementById("toss-toggle").checked) {
+      ui.pendingGame = { ...settings, firstBatter: tossWinner() };
+      ui.screen = "toss";
+    } else {
+      gameState = createGame(settings);
+      ui.screen = "game";
+    }
   }
+  render();
+}
+
+/** Start the match with the batting order decided by the toss. */
+function handleTossContinue() {
+  if (!ui.pendingGame) return;
+  gameState = createGame(ui.pendingGame);
+  ui.pendingGame = null;
+  ui.screen = "game";
   render();
 }
 
@@ -346,6 +403,30 @@ function handleStart() {
 function handleFlip() {
   if (!gameState) return;
   gameState = playBall(gameState, flipPage());
+  render();
+}
+
+/** Begin the second innings from the break. */
+function handleBreakContinue() {
+  if (!gameState) return;
+  gameState = startSecondInnings(gameState);
+  render();
+}
+
+/** Start a new match with the same names, balls per innings and batting order. */
+function handlePlayAgain() {
+  if (!gameState) return;
+  const { players, ballsPerInnings, battingOrder } = gameState;
+  gameState = createGame({ p1: players.p1, p2: players.p2, ballsPerInnings, firstBatter: battingOrder[0] });
+  ui.screen = "game";
+  render();
+}
+
+/** Return to setup with the current names in the inputs. */
+function handleChangePlayers() {
+  if (gameState) ui.pendingNames = { ...gameState.players };
+  ui.setupError = null;
+  ui.screen = "setup";
   render();
 }
 
@@ -379,12 +460,16 @@ function init() {
   prefillPlayers();
   document.getElementById("theme-toggle").addEventListener("click", handleThemeToggle);
   document.getElementById("start-btn").addEventListener("click", handleStart);
+  document.getElementById("toss-continue-btn").addEventListener("click", handleTossContinue);
   document.getElementById("flip-btn").addEventListener("click", handleFlip);
+  document.getElementById("break-continue-btn").addEventListener("click", handleBreakContinue);
+  document.getElementById("play-again-btn").addEventListener("click", handlePlayAgain);
+  document.getElementById("change-players-btn").addEventListener("click", handleChangePlayers);
   render();
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { flipPage, resultForPage, createGame, playBall, startSecondInnings,
+  module.exports = { flipPage, tossWinner, resultForPage, createGame, playBall, startSecondInnings,
                      computeResult, normalizeNames, resolveTheme, toggleTheme, loadPlayers, savePlayers,
                      loadHistory, addHistory, clearHistory, buildHistoryEntry, loadTheme,
                      saveTheme };
