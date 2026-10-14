@@ -236,6 +236,7 @@ const ui = {
   theme: "light",
   screen: "setup",
   setupError: null,
+  pendingNames: null,
 };
 
 /** True when the browser reports a dark colour-scheme preference. */
@@ -285,6 +286,20 @@ function renderSetup() {
   const error = document.getElementById("setup-error");
   error.textContent = ui.setupError || "";
   error.classList.toggle("hidden", !ui.setupError);
+  if (ui.pendingNames) {
+    document.getElementById("p1-name").value = ui.pendingNames.p1;
+    document.getElementById("p2-name").value = ui.pendingNames.p2;
+    ui.pendingNames = null;
+  }
+}
+
+/** Ball log `<li>` items in the "Ball n: Page p – label" format. */
+function logItems(entries) {
+  return entries.map((entry, i) => {
+    const li = document.createElement("li");
+    li.textContent = `Ball ${i + 1}: Page ${entry.page} – ${entry.label}`;
+    return li;
+  });
 }
 
 /** Fill the scoreboard and ball log for the current innings. */
@@ -299,12 +314,12 @@ function renderGame() {
   document.getElementById("last-page").textContent = ball ? String(ball.page) : NO_BALL_YET;
   document.getElementById("last-result").textContent = ball ? ball.label : NO_BALL_YET;
   document.getElementById("target-info").classList.toggle("hidden", gameState.currentInnings === 1);
-  const items = gameState.log[batter].map((entry, i) => {
-    const li = document.createElement("li");
-    li.textContent = `Ball ${i + 1}: Page ${entry.page} – ${entry.label}`;
-    return li;
-  });
-  document.getElementById("ball-log").replaceChildren(...items);
+  if (gameState.target !== null) {
+    const needed = Math.max(gameState.target - gameState.scores[batter], 0);
+    document.getElementById("target").textContent = String(gameState.target);
+    document.getElementById("runs-needed").textContent = String(needed);
+  }
+  document.getElementById("ball-log").replaceChildren(...logItems(gameState.log[batter]));
 }
 
 /** Fill the innings break with the first innings score and the target. */
@@ -317,6 +332,18 @@ function renderBreak() {
     `${gameState.players[second]} needs ${gameState.target} to win`;
 }
 
+/** Fill the result screen: banner, both totals and both ball logs. */
+function renderResult() {
+  if (!gameState || !gameState.result) return;
+  const { winner, p1Score, p2Score } = gameState.result;
+  document.getElementById("result-banner").textContent =
+    winner ? `${gameState.players[winner]} wins!` : "It's a tie!";
+  document.getElementById("result-p1-score").textContent = String(p1Score);
+  document.getElementById("result-p2-score").textContent = String(p2Score);
+  document.getElementById("result-log-p1").replaceChildren(...logItems(gameState.log.p1));
+  document.getElementById("result-log-p2").replaceChildren(...logItems(gameState.log.p2));
+}
+
 /** Redraw the page from state. */
 function render() {
   renderTheme();
@@ -324,6 +351,7 @@ function render() {
   renderSetup();
   renderGame();
   renderBreak();
+  renderResult();
 }
 
 /** Start a match from the setup form, or show the name error and stay on setup. */
@@ -345,6 +373,30 @@ function handleStart() {
 function handleFlip() {
   if (!gameState) return;
   gameState = playBall(gameState, flipPage());
+  render();
+}
+
+/** Begin the second innings from the break. */
+function handleBreakContinue() {
+  if (!gameState) return;
+  gameState = startSecondInnings(gameState);
+  render();
+}
+
+/** Start a new match with the same names, balls per innings and batting order. */
+function handlePlayAgain() {
+  if (!gameState) return;
+  const { players, ballsPerInnings, battingOrder } = gameState;
+  gameState = createGame({ p1: players.p1, p2: players.p2, ballsPerInnings, firstBatter: battingOrder[0] });
+  ui.screen = "game";
+  render();
+}
+
+/** Return to setup with the current names in the inputs. */
+function handleChangePlayers() {
+  if (gameState) ui.pendingNames = { ...gameState.players };
+  ui.setupError = null;
+  ui.screen = "setup";
   render();
 }
 
@@ -370,6 +422,9 @@ function init() {
   document.getElementById("theme-toggle").addEventListener("click", handleThemeToggle);
   document.getElementById("start-btn").addEventListener("click", handleStart);
   document.getElementById("flip-btn").addEventListener("click", handleFlip);
+  document.getElementById("break-continue-btn").addEventListener("click", handleBreakContinue);
+  document.getElementById("play-again-btn").addEventListener("click", handlePlayAgain);
+  document.getElementById("change-players-btn").addEventListener("click", handleChangePlayers);
   render();
 }
 
