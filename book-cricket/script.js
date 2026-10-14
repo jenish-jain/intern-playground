@@ -237,6 +237,7 @@ const ui = {
   screen: "setup",
   setupError: null,
   pendingNames: null,
+  previousScreen: "setup",
 };
 
 /** True when the browser reports a dark colour-scheme preference. */
@@ -344,6 +345,43 @@ function renderResult() {
   document.getElementById("result-log-p2").replaceChildren(...logItems(gameState.log.p2));
 }
 
+/** Two-digit zero-padded number. */
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+/** Local `YYYY-MM-DD HH:MM` for an ISO date string; the raw value if it is not a valid date. */
+function formatHistoryDate(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso ?? "");
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/** One history `<tr>` with Date, Player 1, Player 2, Winner and Balls cells. */
+function historyRow(entry) {
+  const tr = document.createElement("tr");
+  const cells = [
+    formatHistoryDate(entry.date),
+    `${entry.p1.name} (${entry.p1.score})`,
+    `${entry.p2.name} (${entry.p2.score})`,
+    entry.winner === null || entry.winner === undefined ? "Tie" : String(entry.winner),
+    String(entry.ballsPerInnings),
+  ];
+  for (const text of cells) {
+    const td = document.createElement("td");
+    td.textContent = text;
+    tr.appendChild(td);
+  }
+  return tr;
+}
+
+/** Fill the history table from storage and toggle the empty message. */
+function renderHistory() {
+  const entries = loadHistory(getStorage()).filter((entry) => entry && entry.p1 && entry.p2);
+  document.getElementById("history-table").replaceChildren(...entries.map(historyRow));
+  document.getElementById("history-empty").classList.toggle("hidden", entries.length > 0);
+}
+
 /** Redraw the page from state. */
 function render() {
   renderTheme();
@@ -352,6 +390,7 @@ function render() {
   renderGame();
   renderBreak();
   renderResult();
+  renderHistory();
 }
 
 /** Start a match from the setup form, or show the name error and stay on setup. */
@@ -372,7 +411,11 @@ function handleStart() {
 /** Play one ball on a random page. */
 function handleFlip() {
   if (!gameState) return;
+  const wasFinished = gameState.phase === "result";
   gameState = playBall(gameState, flipPage());
+  if (!wasFinished && gameState.phase === "result") {
+    addHistory(getStorage(), buildHistoryEntry(gameState));
+  }
   render();
 }
 
@@ -397,6 +440,26 @@ function handleChangePlayers() {
   if (gameState) ui.pendingNames = { ...gameState.players };
   ui.setupError = null;
   ui.screen = "setup";
+  render();
+}
+
+/** Open the history screen, remembering the screen to return to. */
+function handleHistoryOpen() {
+  ui.previousScreen = currentScreen();
+  ui.screen = "history";
+  render();
+}
+
+/** Return from history to the screen it was opened from. */
+function handleHistoryBack() {
+  ui.screen = ui.previousScreen === "result" ? "game" : ui.previousScreen;
+  render();
+}
+
+/** Clear all saved history after confirmation. */
+function handleHistoryReset() {
+  if (!window.confirm("Clear all match history?")) return;
+  clearHistory(getStorage());
   render();
 }
 
@@ -425,6 +488,10 @@ function init() {
   document.getElementById("break-continue-btn").addEventListener("click", handleBreakContinue);
   document.getElementById("play-again-btn").addEventListener("click", handlePlayAgain);
   document.getElementById("change-players-btn").addEventListener("click", handleChangePlayers);
+  document.getElementById("view-history-btn").addEventListener("click", handleHistoryOpen);
+  document.getElementById("setup-history-btn").addEventListener("click", handleHistoryOpen);
+  document.getElementById("history-back-btn").addEventListener("click", handleHistoryBack);
+  document.getElementById("reset-history-btn").addEventListener("click", handleHistoryReset);
   render();
 }
 
