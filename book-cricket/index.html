@@ -46,7 +46,9 @@
       <p>Page: <span id="last-page"></span></p>
       <p>Result: <span id="last-result"></span></p>
       <p id="target-info" class="hidden">Target: <span id="target"></span>, runs needed: <span id="runs-needed"></span></p>
+      <div id="book" class="book" aria-hidden="true"><div class="book-page"></div></div>
       <button id="flip-btn" type="button">Flip</button>
+      <button id="mute-toggle" type="button" aria-pressed="false">Mute</button>
       <ol id="ball-log"></ol>
     </section>
 
@@ -60,7 +62,9 @@
     <section id="screen-result" class="hidden">
       <h2 id="result-banner"></h2>
       <p>Player 1: <span id="result-p1-score"></span></p>
+      <p id="tally-p1"></p>
       <p>Player 2: <span id="result-p2-score"></span></p>
+      <p id="tally-p2"></p>
       <ol id="result-log-p1"></ol>
       <ol id="result-log-p2"></ol>
       <button id="play-again-btn" type="button">Play again</button>

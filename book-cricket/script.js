@@ -28,6 +28,13 @@ function resultForPage(page) {
   return { page, digit, runs, out, label };
 }
 
+/** Sound for a ball: "six" for 6 runs, "out" for OUT, otherwise null. */
+function soundForBall(ball) {
+  if (!ball) return null;
+  if (ball.out) return "out";
+  return ball.runs === MAX_RUNS ? "six" : null;
+}
+
 /** New game state in phase "innings", innings 1, with `firstBatter` batting. */
 function createGame({ p1, p2, ballsPerInnings, firstBatter = "p1" }) {
   const secondBatter = firstBatter === "p1" ? "p2" : "p1";
@@ -119,6 +126,31 @@ function toggleTheme(theme) {
   return theme === "dark" ? "light" : "dark";
 }
 
+/** Key of `tally` matching `name` case-insensitively, or undefined. */
+function findTallyKey(tally, name) {
+  const wanted = name.toLowerCase();
+  return Object.keys(tally).find((key) => key.toLowerCase() === wanted);
+}
+
+/** "w", "l" or "t" for a player's side of a finished match (`winner` null is a tie). */
+function outcomeFor(name, winner) {
+  if (winner === null || winner === undefined) return "t";
+  return name.toLowerCase() === winner.toLowerCase() ? "w" : "l";
+}
+
+/** Add a finished match (history entry shape) to a copy of `tally` `{ [name]: { w, l, t } }`; the input is not mutated. */
+function updateTally(tally, entry) {
+  const next = { ...tally };
+  for (const side of [entry.p1, entry.p2]) {
+    const key = findTallyKey(next, side.name);
+    const record = key === undefined ? { w: 0, l: 0, t: 0 } : next[key];
+    const outcome = outcomeFor(side.name, entry.winner);
+    if (key !== undefined) delete next[key];
+    next[side.name] = { ...record, [outcome]: record[outcome] + 1 };
+  }
+  return next;
+}
+
 // ---------------------------------------------------------------------------
 // Storage (wraps localStorage; every call in try/catch)
 // ---------------------------------------------------------------------------
@@ -200,6 +232,21 @@ function buildHistoryEntry(state, date = new Date()) {
   };
 }
 
+const TALLY_KEY = "bookCricket.tally";
+
+/** Saved win/loss/tie tally `{ [name]: { w, l, t } }`; {} if missing, corrupt or not an object. Malformed records are dropped. */
+function loadTally(storage) {
+  const data = readJson(storage, TALLY_KEY);
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+  const isRecord = (r) => r && ["w", "l", "t"].every((k) => Number.isInteger(r[k]));
+  return Object.fromEntries(Object.entries(data).filter(([, record]) => isRecord(record)));
+}
+
+/** Persist the tally; write failures are ignored. */
+function saveTally(storage, tally) {
+  writeJson(storage, TALLY_KEY, tally);
+}
+
 const THEME_KEY = "bookCricket.theme";
 
 /** Read the saved theme: "light", "dark", or null when missing, corrupt or unreadable. */
@@ -228,28 +275,76 @@ function saveTheme(storage, theme) {
   }
 }
 
+const MUTED_KEY = "bookCricket.muted";
+
+/** Saved sound mute flag; false unless the stored value is JSON true. */
+function loadMuted(storage) {
+  return readJson(storage, MUTED_KEY) === true;
+}
+
+/** Persist the sound mute flag as a JSON boolean; failures are ignored. */
+function saveMuted(storage, muted) {
+  writeJson(storage, MUTED_KEY, Boolean(muted));
+}
+
 // ---------------------------------------------------------------------------
 // UI (DOM)
 // ---------------------------------------------------------------------------
 
 const NO_BALL_YET = "–";
 const SCREENS = ["setup", "toss", "game", "break", "result", "history"];
+const DEFAULT_ANIMATION_MS = 600;
 
 let gameState = null;
 
 const ui = {
   theme: "light",
+  muted: false,
   screen: "setup",
   setupError: null,
   pendingNames: null,
+  previousScreen: "setup",
   pendingGame: null,
   cpu: false,
   cpuTimer: null,
   savedP2Name: "",
+  flipping: false,
 };
 
 const DEFAULT_CPU_DELAY_MS = 700;
 const COMPUTER_NAME = "Computer";
+
+/** Tone for each sound: frequency in Hz, waveform, and length in seconds. */
+const SOUNDS = {
+  six: { frequency: 1047, type: "sine", seconds: 0.25 },
+  out: { frequency: 196, type: "sawtooth", seconds: 0.4 },
+};
+
+let audioContext = null;
+
+/** Play a short tone for "six" or "out". Silent when muted, when Web Audio is missing, or on any audio error. */
+function playSound(kind) {
+  const sound = SOUNDS[kind];
+  if (!sound || ui.muted || !window.AudioContext) return;
+  try {
+    if (!audioContext) audioContext = new window.AudioContext();
+    const oscillator = audioContext.createOscillator();
+    oscillator.type = sound.type;
+    oscillator.frequency.value = sound.frequency;
+    oscillator.connect(audioContext.destination);
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + sound.seconds);
+  } catch (err) {
+    // Sound is optional: the game keeps working without it.
+  }
+}
+
+/** Page-flip duration from window.BOOK_CRICKET_CONFIG.animationMs (default 600; 0 disables the wait). */
+function animationMs() {
+  const config = window.BOOK_CRICKET_CONFIG;
+  const value = config ? config.animationMs : undefined;
+  return typeof value === "number" && value >= 0 ? value : DEFAULT_ANIMATION_MS;
+}
 
 /** True when the browser reports a dark colour-scheme preference. */
 function systemPrefersDark() {
@@ -275,6 +370,13 @@ function renderTheme() {
     toggle.textContent = dark ? "Light mode" : "Dark mode";
     toggle.setAttribute("aria-pressed", String(dark));
   }
+}
+
+/** Apply ui.muted to the mute toggle. */
+function renderMute() {
+  const toggle = document.getElementById("mute-toggle");
+  toggle.textContent = ui.muted ? "Unmute" : "Mute";
+  toggle.setAttribute("aria-pressed", String(ui.muted));
 }
 
 /** The screen to show: the game screens follow gameState.phase. */
@@ -340,7 +442,6 @@ function renderGame() {
     document.getElementById("runs-needed").textContent = String(needed);
   }
   document.getElementById("ball-log").replaceChildren(...logItems(gameState.log[batter]));
-  document.getElementById("flip-btn").disabled = isCpuTurn();
 }
 
 /** True while the computer is batting and the game screen is showing. */
@@ -385,11 +486,17 @@ function syncCpuToggle() {
   input.disabled = checked;
 }
 
-/** Store a new game state and save the history entry once the match is finished. */
+/** Store a new game state, sound a six or a wicket, and save history and tally once the match is finished. */
 function commitState(next) {
-  const finished = next.phase === "result" && gameState.phase !== "result";
+  const before = gameState;
   gameState = next;
-  if (finished) addHistory(getStorage(), buildHistoryEntry(next));
+  if (next !== before) playSound(soundForBall(next.lastBall));
+  if (next.phase === "result" && before.phase !== "result") {
+    const storage = getStorage();
+    const entry = buildHistoryEntry(next);
+    addHistory(storage, entry);
+    saveTally(storage, updateTally(loadTally(storage), entry));
+  }
 }
 
 /** The computer flips its ball; with a zero delay it plays out its whole innings in one tick. */
@@ -399,6 +506,14 @@ function handleCpuFlip() {
   commitState(playBall(gameState, flipPage()));
   while (cpuDelayMs() === 0 && isCpuTurn()) commitState(playBall(gameState, flipPage()));
   render();
+}
+
+/** Show the book flip while a ball is pending and lock the Flip button. */
+function renderBook() {
+  const book = document.getElementById("book");
+  book.classList.toggle("flipping", ui.flipping);
+  book.style.setProperty("--flip-duration", `${animationMs()}ms`);
+  document.getElementById("flip-btn").disabled = ui.flipping || isCpuTurn();
 }
 
 /** Fill the innings break with the first innings score and the target. */
@@ -411,7 +526,17 @@ function renderBreak() {
     `${gameState.players[second]} needs ${gameState.target} to win`;
 }
 
-/** Fill the result screen: banner, both totals and both ball logs. */
+/** Fill each player's "W w · L l · T t" record from the saved tally (zeros when none). */
+function renderTally() {
+  const tally = loadTally(getStorage());
+  for (const side of ["p1", "p2"]) {
+    const key = findTallyKey(tally, gameState.players[side]);
+    const { w, l, t } = key === undefined ? { w: 0, l: 0, t: 0 } : tally[key];
+    document.getElementById(`tally-${side}`).textContent = `W ${w} · L ${l} · T ${t}`;
+  }
+}
+
+/** Fill the result screen: banner, both totals, both ball logs and the tally. */
 function renderResult() {
   if (!gameState || !gameState.result) return;
   const { winner, p1Score, p2Score } = gameState.result;
@@ -421,17 +546,58 @@ function renderResult() {
   document.getElementById("result-p2-score").textContent = String(p2Score);
   document.getElementById("result-log-p1").replaceChildren(...logItems(gameState.log.p1));
   document.getElementById("result-log-p2").replaceChildren(...logItems(gameState.log.p2));
+  renderTally();
+}
+
+/** Two-digit zero-padded number. */
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+/** Local `YYYY-MM-DD HH:MM` for an ISO date string; the raw value if it is not a valid date. */
+function formatHistoryDate(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso ?? "");
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/** One history `<tr>` with Date, Player 1, Player 2, Winner and Balls cells. */
+function historyRow(entry) {
+  const tr = document.createElement("tr");
+  const cells = [
+    formatHistoryDate(entry.date),
+    `${entry.p1.name} (${entry.p1.score})`,
+    `${entry.p2.name} (${entry.p2.score})`,
+    entry.winner === null || entry.winner === undefined ? "Tie" : String(entry.winner),
+    String(entry.ballsPerInnings),
+  ];
+  for (const text of cells) {
+    const td = document.createElement("td");
+    td.textContent = text;
+    tr.appendChild(td);
+  }
+  return tr;
+}
+
+/** Fill the history table from storage and toggle the empty message. */
+function renderHistory() {
+  const entries = loadHistory(getStorage()).filter((entry) => entry && entry.p1 && entry.p2);
+  document.getElementById("history-table").replaceChildren(...entries.map(historyRow));
+  document.getElementById("history-empty").classList.toggle("hidden", entries.length > 0);
 }
 
 /** Redraw the page from state. */
 function render() {
   renderTheme();
+  renderMute();
   renderScreens(currentScreen());
   renderSetup();
   renderToss();
   renderGame();
+  renderBook();
   renderBreak();
   renderResult();
+  renderHistory();
   syncCpuTimer();
 }
 
@@ -446,6 +612,7 @@ function handleStart() {
   if (!names.error) {
     const ballsPerInnings = Number(document.getElementById("balls-select").value);
     const settings = { p1: names.p1, p2: names.p2, ballsPerInnings };
+    savePlayers(getStorage(), { p1: names.p1, p2: names.p2 });
     if (document.getElementById("toss-toggle").checked) {
       ui.pendingGame = { ...settings, firstBatter: tossWinner() };
       ui.screen = "toss";
@@ -466,11 +633,22 @@ function handleTossContinue() {
   render();
 }
 
-/** Play one ball on a random page. */
+/** Play one ball on a random page, after the page-flip animation (applied at once when animationMs is 0); sounds a six or a wicket. */
 function handleFlip() {
-  if (!gameState || isCpuTurn()) return;
-  commitState(playBall(gameState, flipPage()));
-  render();
+  if (!gameState || ui.flipping || isCpuTurn()) return;
+  const applyBall = () => {
+    ui.flipping = false;
+    commitState(playBall(gameState, flipPage()));
+    render();
+  };
+  const delay = animationMs();
+  if (delay > 0) {
+    ui.flipping = true;
+    render();
+    setTimeout(applyBall, delay);
+  } else {
+    applyBall();
+  }
 }
 
 /** Begin the second innings from the break. */
@@ -497,10 +675,37 @@ function handleChangePlayers() {
   render();
 }
 
+/** Open the history screen, remembering the screen to return to. */
+function handleHistoryOpen() {
+  ui.previousScreen = currentScreen();
+  ui.screen = "history";
+  render();
+}
+
+/** Return from history to the screen it was opened from. */
+function handleHistoryBack() {
+  ui.screen = ui.previousScreen === "result" ? "game" : ui.previousScreen;
+  render();
+}
+
+/** Clear all saved history after confirmation. */
+function handleHistoryReset() {
+  if (!window.confirm("Clear all match history?")) return;
+  clearHistory(getStorage());
+  render();
+}
+
 /** Switch between light and dark and remember the choice. */
 function handleThemeToggle() {
   ui.theme = toggleTheme(ui.theme);
   saveTheme(getStorage(), ui.theme);
+  render();
+}
+
+/** Mute or unmute sound effects and remember the choice. */
+function handleMuteToggle() {
+  ui.muted = !ui.muted;
+  saveMuted(getStorage(), ui.muted);
   render();
 }
 
@@ -513,10 +718,21 @@ function getStorage() {
   }
 }
 
+/** Pre-fill the setup name inputs from the saved players, if any. */
+function prefillPlayers() {
+  const saved = loadPlayers(getStorage());
+  if (!saved) return;
+  document.getElementById("p1-name").value = saved.p1;
+  document.getElementById("p2-name").value = saved.p2;
+}
+
 /** Wire up the page. */
 function init() {
   ui.theme = resolveTheme(loadTheme(getStorage()), systemPrefersDark());
+  ui.muted = loadMuted(getStorage());
+  prefillPlayers();
   document.getElementById("theme-toggle").addEventListener("click", handleThemeToggle);
+  document.getElementById("mute-toggle").addEventListener("click", handleMuteToggle);
   document.getElementById("start-btn").addEventListener("click", handleStart);
   document.getElementById("cpu-toggle").addEventListener("change", syncCpuToggle);
   document.getElementById("toss-continue-btn").addEventListener("click", handleTossContinue);
@@ -524,13 +740,18 @@ function init() {
   document.getElementById("break-continue-btn").addEventListener("click", handleBreakContinue);
   document.getElementById("play-again-btn").addEventListener("click", handlePlayAgain);
   document.getElementById("change-players-btn").addEventListener("click", handleChangePlayers);
+  document.getElementById("view-history-btn").addEventListener("click", handleHistoryOpen);
+  document.getElementById("setup-history-btn").addEventListener("click", handleHistoryOpen);
+  document.getElementById("history-back-btn").addEventListener("click", handleHistoryBack);
+  document.getElementById("reset-history-btn").addEventListener("click", handleHistoryReset);
   render();
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { flipPage, tossWinner, resultForPage, createGame, playBall, startSecondInnings,
-                     computeResult, normalizeNames, resolveTheme, toggleTheme, loadPlayers, savePlayers,
-                     loadHistory, addHistory, clearHistory, buildHistoryEntry, loadTheme,
-                     saveTheme };
+  module.exports = { flipPage, tossWinner, resultForPage, soundForBall, createGame, playBall,
+                     startSecondInnings, computeResult, normalizeNames, resolveTheme, toggleTheme,
+                     findTallyKey, updateTally, loadPlayers, savePlayers, loadHistory, addHistory,
+                     clearHistory, buildHistoryEntry, loadTally, saveTally, loadTheme, saveTheme,
+                     loadMuted, saveMuted };
 }
 if (typeof document !== "undefined") init();
