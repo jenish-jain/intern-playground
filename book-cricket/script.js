@@ -379,6 +379,7 @@ function handleStart() {
   if (!names.error) {
     const ballsPerInnings = Number(document.getElementById("balls-select").value);
     const settings = { p1: names.p1, p2: names.p2, ballsPerInnings };
+    savePlayers(getStorage(), { p1: names.p1, p2: names.p2 });
     if (document.getElementById("toss-toggle").checked) {
       ui.pendingGame = { ...settings, firstBatter: tossWinner() };
       ui.screen = "toss";
