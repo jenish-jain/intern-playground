@@ -379,6 +379,7 @@ function handleStart() {
   if (!names.error) {
     const ballsPerInnings = Number(document.getElementById("balls-select").value);
     const settings = { p1: names.p1, p2: names.p2, ballsPerInnings };
+    savePlayers(getStorage(), { p1: names.p1, p2: names.p2 });
     if (document.getElementById("toss-toggle").checked) {
       ui.pendingGame = { ...settings, firstBatter: tossWinner() };
       ui.screen = "toss";
@@ -446,9 +447,18 @@ function getStorage() {
   }
 }
 
+/** Pre-fill the setup name inputs from the saved players, if any. */
+function prefillPlayers() {
+  const saved = loadPlayers(getStorage());
+  if (!saved) return;
+  document.getElementById("p1-name").value = saved.p1;
+  document.getElementById("p2-name").value = saved.p2;
+}
+
 /** Wire up the page. */
 function init() {
   ui.theme = resolveTheme(loadTheme(getStorage()), systemPrefersDark());
+  prefillPlayers();
   document.getElementById("theme-toggle").addEventListener("click", handleThemeToggle);
   document.getElementById("start-btn").addEventListener("click", handleStart);
   document.getElementById("toss-continue-btn").addEventListener("click", handleTossContinue);

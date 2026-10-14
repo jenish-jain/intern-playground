@@ -120,8 +120,8 @@ Before the first ball of an innings, `#last-page` and `#last-result` show `–`.
 - `node --test` (built-in runner, Node ≥ 20) run from `book-cricket/`; test files `tests/*.test.js`, CommonJS.
 - Unit tests `require("../script.js")` and pass explicit `rng`/`page` values and fake storage objects.
 - DOM tests use `tests/helpers/app.js`:
-  `loadApp({ storage = {}, random = [] , confirm = true, config, colorScheme })` → `{ window, document, click(id), $(selector) }`.
-  It creates a `JSDOM` from `index.html` with `url: "http://localhost/"` and `runScripts: "outside-only"`, seeds `window.localStorage` from `storage` (values JSON-stringified), replaces `window.Math.random` with a function returning the given values in order (then repeating the last, or 0.5 if empty), stubs `window.confirm`, sets `window.BOOK_CRICKET_CONFIG` from `config`, stubs `window.matchMedia` from `colorScheme` (`{ dark: true }` makes `(prefers-color-scheme: dark)` match; omitted leaves it undefined), then evaluates `script.js` with `window.eval`.
+  `loadApp({ storage = {}, rawStorage = {}, random = [] , confirm = true, config, colorScheme })` → `{ window, document, click(id), $(selector) }`.
+  It creates a `JSDOM` from `index.html` with `url: "http://localhost/"` and `runScripts: "outside-only"`, seeds `window.localStorage` from `storage` (values JSON-stringified) and then from `rawStorage` (string values stored as-is, e.g. to seed invalid JSON), replaces `window.Math.random` with a function returning the given values in order (then repeating the last, or 0.5 if empty), stubs `window.confirm`, sets `window.BOOK_CRICKET_CONFIG` from `config`, stubs `window.matchMedia` from `colorScheme` (`{ dark: true }` makes `(prefers-color-scheme: dark)` match; omitted leaves it undefined), then evaluates `script.js` with `window.eval`.
   Page from a random value `r`: `Math.floor(r * 200) + 1`, so `r = (page - 0.5) / 200` yields `page`.
 - No real timers or network in tests. Animation and computer delays are configurable through `window.BOOK_CRICKET_CONFIG` (`{ animationMs, cpuDelayMs }`, defaults 600 and 700) so tests can set them to 0.
 
