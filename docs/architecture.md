@@ -32,11 +32,13 @@ One file, organised in three layers, top to bottom. Lower layers never touch the
    - `startSecondInnings(state)` → state in phase `"innings"`, innings 2.
    - `computeResult(state)` → `{ winner: "p1" | "p2" | null, p1Score, p2Score }`.
    - `normalizeNames(rawP1, rawP2)` → `{ p1, p2, error }` (trim, blank defaults, case-insensitive duplicate → `error: "Players must have different names"`).
+   - `updateTally(tally, entry)` → **new** tally `{ [name]: { w, l, t } }` after one finished match. `entry` is a history entry (`p1.name`, `p2.name`, `winner`; `winner` null is a tie). Names match case-insensitively (`findTallyKey(tally, name)`); the record is stored under the entry's spelling.
 2. **Storage (wraps `localStorage`, every call in try/catch)**
    - `loadPlayers(storage)` / `savePlayers(storage, {p1, p2})`
    - `loadHistory(storage)` → array (`[]` if missing, corrupt or not an array)
    - `addHistory(storage, entry)` → prepends, keeps at most 10, returns new array
    - `clearHistory(storage)`
+   - `loadTally(storage)` → `{ [name]: { w, l, t } }` (`{}` if missing, corrupt or not an object; malformed records dropped) / `saveTally(storage, tally)`
    - `loadTheme(storage)` → `"light" | "dark" | null` / `saveTheme(storage, theme)` (pure helpers `resolveTheme(saved, prefersDark)` and `toggleTheme(theme)` live in the logic section)
    - `buildHistoryEntry(state, date = new Date())` → entry in the PRD shape
    - `storage` is passed in (defaults to `window.localStorage` at the UI layer) so tests can use fakes, including one whose methods throw.
@@ -51,8 +53,9 @@ One file, organised in three layers, top to bottom. Lower layers never touch the
 // bottom of script.js
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { flipPage, tossWinner, resultForPage, createGame, playBall, startSecondInnings,
-                     computeResult, normalizeNames, loadPlayers, savePlayers, loadHistory,
-                     addHistory, clearHistory, buildHistoryEntry };
+                     computeResult, normalizeNames, resolveTheme, toggleTheme, findTallyKey,
+                     updateTally, loadPlayers, savePlayers, loadHistory, addHistory, clearHistory,
+                     buildHistoryEntry, loadTally, saveTally, loadTheme, saveTheme };
 }
 if (typeof document !== "undefined") init();
 ```
@@ -96,7 +99,7 @@ UI screens (`ui.screen`): `"setup" | "toss" | "game" | "break" | "result" | "his
 | `#screen-toss` | `#toss-result`, `#toss-continue-btn` |
 | `#screen-game` | `#innings-label` ("Innings 1"/"Innings 2"), `#batter-name`, `#score`, `#balls-left`, `#last-page`, `#last-result`, `#target-info` (hidden in innings 1; contains `#target` and `#runs-needed`), `#flip-btn`, `#ball-log` (`<ol>`, one `<li>` per ball) |
 | `#screen-break` | `#break-score`, `#break-target`, `#break-continue-btn` |
-| `#screen-result` | `#result-banner`, `#result-p1-score`, `#result-p2-score`, `#result-log-p1`, `#result-log-p2` (`<ol>`), `#play-again-btn`, `#change-players-btn`, `#view-history-btn` |
+| `#screen-result` | `#result-banner`, `#result-p1-score`, `#tally-p1`, `#result-p2-score`, `#tally-p2`, `#result-log-p1`, `#result-log-p2` (`<ol>`), `#play-again-btn`, `#change-players-btn`, `#view-history-btn` |
 | `#screen-history` | `#history-table` (`<tbody>` rows: Date, Player 1, Player 2, Winner, Balls), `#history-empty` (shown when no matches), `#reset-history-btn`, `#history-back-btn` |
 
 Text formats:
@@ -105,6 +108,7 @@ Text formats:
 - `#result-banner`: `"{name} wins!"` or `"It's a tie!"`.
 - `#toss-result`: `"{name} won the toss and bats first"`.
 - History Winner column: the winner's name or `Tie`; Date column: `YYYY-MM-DD HH:MM` in local time.
+- `#tally-p1` / `#tally-p2`: `"W {w} · L {l} · T {t}"` for that player's record (zeros when none), matched by name case-insensitively.
 
 Before the first ball of an innings, `#last-page` and `#last-result` show `–`.
 
@@ -113,7 +117,7 @@ Before the first ball of an innings, `#last-page` and `#last-result` show `–`.
 - Keys: `bookCricket.players`, `bookCricket.history` (MVP); `bookCricket.tally`, `bookCricket.theme`, `bookCricket.muted` (EXTRA).
 - All reads: `JSON.parse` inside try/catch; any error or wrong shape → default value. All writes: try/catch, failures ignored (the game keeps working).
 - `bookCricket.theme` holds `"light"` or `"dark"` (JSON-encoded, like every key), saved on each `#theme-toggle` click. On load: saved theme if valid, otherwise `matchMedia("(prefers-color-scheme: dark)")` when available, otherwise light. Dark sets `data-theme="dark"` on `<html>`; light removes the attribute.
-- Names saved on a successful Start. History entry saved once, when a match reaches phase `"result"`.
+- Names saved on a successful Start. History entry saved once, when a match reaches phase `"result"`; the tally is updated at the same moment. Reset history clears only `bookCricket.history`, never `bookCricket.tally`.
 
 ## Testing
 
