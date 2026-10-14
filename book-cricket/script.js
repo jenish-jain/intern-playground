@@ -392,11 +392,12 @@ function commitState(next) {
   if (finished) addHistory(getStorage(), buildHistoryEntry(next));
 }
 
-/** The computer flips its ball. */
+/** The computer flips its ball; with a zero delay it plays out its whole innings in one tick. */
 function handleCpuFlip() {
   ui.cpuTimer = null;
   if (!isCpuTurn()) return;
   commitState(playBall(gameState, flipPage()));
+  while (cpuDelayMs() === 0 && isCpuTurn()) commitState(playBall(gameState, flipPage()));
   render();
 }
 
