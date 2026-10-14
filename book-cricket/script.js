@@ -305,8 +305,14 @@ const ui = {
   pendingNames: null,
   previousScreen: "setup",
   pendingGame: null,
+  cpu: false,
+  cpuTimer: null,
+  savedP2Name: "",
   flipping: false,
 };
+
+const DEFAULT_CPU_DELAY_MS = 700;
+const COMPUTER_NAME = "Computer";
 
 /** Tone for each sound: frequency in Hz, waveform, and length in seconds. */
 const SOUNDS = {
@@ -396,7 +402,7 @@ function renderSetup() {
   error.classList.toggle("hidden", !ui.setupError);
   if (ui.pendingNames) {
     document.getElementById("p1-name").value = ui.pendingNames.p1;
-    document.getElementById("p2-name").value = ui.pendingNames.p2;
+    if (!ui.cpu) document.getElementById("p2-name").value = ui.pendingNames.p2;
     ui.pendingNames = null;
   }
 }
@@ -438,12 +444,76 @@ function renderGame() {
   document.getElementById("ball-log").replaceChildren(...logItems(gameState.log[batter]));
 }
 
+/** True while the computer is batting and the game screen is showing. */
+function isCpuTurn() {
+  return ui.cpu && ui.screen === "game" && Boolean(gameState)
+    && gameState.phase === "innings" && gameState.currentBatter === "p2";
+}
+
+/** Milliseconds between the computer's automatic flips. */
+function cpuDelayMs() {
+  const config = window.BOOK_CRICKET_CONFIG;
+  const delay = config && config.cpuDelayMs;
+  return typeof delay === "number" && delay >= 0 ? delay : DEFAULT_CPU_DELAY_MS;
+}
+
+/** Cancel any pending computer flip. */
+function cancelCpuTimer() {
+  if (ui.cpuTimer !== null) clearTimeout(ui.cpuTimer);
+  ui.cpuTimer = null;
+}
+
+/** Keep exactly one computer flip pending while it is the computer's turn, none otherwise. */
+function syncCpuTimer() {
+  if (!isCpuTurn()) {
+    cancelCpuTimer();
+  } else if (ui.cpuTimer === null) {
+    ui.cpuTimer = setTimeout(handleCpuFlip, cpuDelayMs());
+  }
+}
+
+/** Disable and fix the Player 2 input while vs Computer is on; restore it when off. */
+function syncCpuToggle() {
+  const input = document.getElementById("p2-name");
+  const checked = document.getElementById("cpu-toggle").checked;
+  if (checked === input.disabled) return;
+  if (checked) {
+    ui.savedP2Name = input.value;
+    input.value = COMPUTER_NAME;
+  } else {
+    input.value = ui.savedP2Name;
+  }
+  input.disabled = checked;
+}
+
+/** Store a new game state, sound a six or a wicket, and save history and tally once the match is finished. */
+function commitState(next) {
+  const before = gameState;
+  gameState = next;
+  if (next !== before) playSound(soundForBall(next.lastBall));
+  if (next.phase === "result" && before.phase !== "result") {
+    const storage = getStorage();
+    const entry = buildHistoryEntry(next);
+    addHistory(storage, entry);
+    saveTally(storage, updateTally(loadTally(storage), entry));
+  }
+}
+
+/** The computer flips its ball; with a zero delay it plays out its whole innings in one tick. */
+function handleCpuFlip() {
+  ui.cpuTimer = null;
+  if (!isCpuTurn()) return;
+  commitState(playBall(gameState, flipPage()));
+  while (cpuDelayMs() === 0 && isCpuTurn()) commitState(playBall(gameState, flipPage()));
+  render();
+}
+
 /** Show the book flip while a ball is pending and lock the Flip button. */
 function renderBook() {
   const book = document.getElementById("book");
   book.classList.toggle("flipping", ui.flipping);
   book.style.setProperty("--flip-duration", `${animationMs()}ms`);
-  document.getElementById("flip-btn").disabled = ui.flipping;
+  document.getElementById("flip-btn").disabled = ui.flipping || isCpuTurn();
 }
 
 /** Fill the innings break with the first innings score and the target. */
@@ -528,13 +598,15 @@ function render() {
   renderBreak();
   renderResult();
   renderHistory();
+  syncCpuTimer();
 }
 
 /** Start a match from the setup form (via the toss screen when the toss is on), or show the name error. */
 function handleStart() {
+  ui.cpu = document.getElementById("cpu-toggle").checked;
   const names = normalizeNames(
     document.getElementById("p1-name").value,
-    document.getElementById("p2-name").value,
+    ui.cpu ? COMPUTER_NAME : document.getElementById("p2-name").value,
   );
   ui.setupError = names.error;
   if (!names.error) {
@@ -563,19 +635,10 @@ function handleTossContinue() {
 
 /** Play one ball on a random page, after the page-flip animation (applied at once when animationMs is 0); sounds a six or a wicket. */
 function handleFlip() {
-  if (!gameState || ui.flipping) return;
+  if (!gameState || ui.flipping || isCpuTurn()) return;
   const applyBall = () => {
-    const before = gameState;
-    const wasFinished = gameState.phase === "result";
-    gameState = playBall(gameState, flipPage());
-    if (gameState !== before) playSound(soundForBall(gameState.lastBall));
-    if (!wasFinished && gameState.phase === "result") {
-      const storage = getStorage();
-      const entry = buildHistoryEntry(gameState);
-      addHistory(storage, entry);
-      saveTally(storage, updateTally(loadTally(storage), entry));
-    }
     ui.flipping = false;
+    commitState(playBall(gameState, flipPage()));
     render();
   };
   const delay = animationMs();
@@ -671,6 +734,7 @@ function init() {
   document.getElementById("theme-toggle").addEventListener("click", handleThemeToggle);
   document.getElementById("mute-toggle").addEventListener("click", handleMuteToggle);
   document.getElementById("start-btn").addEventListener("click", handleStart);
+  document.getElementById("cpu-toggle").addEventListener("change", syncCpuToggle);
   document.getElementById("toss-continue-btn").addEventListener("click", handleTossContinue);
   document.getElementById("flip-btn").addEventListener("click", handleFlip);
   document.getElementById("break-continue-btn").addEventListener("click", handleBreakContinue);

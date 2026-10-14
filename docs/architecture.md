@@ -99,7 +99,7 @@ UI screens (`ui.screen`): `"setup" | "toss" | "game" | "break" | "result" | "his
 | Screen section | Elements |
 |---|---|
 | header (outside the screens, always visible) | `#theme-toggle` (button; text "Dark mode"/"Light mode", `aria-pressed` reflects dark) |
-| `#screen-setup` | `#p1-name`, `#p2-name` (text, `maxlength="20"`), `#balls-select` (`<select>` with values 6, 12, 18; 6 selected), `#toss-toggle` (checkbox), `#start-btn`, `#setup-error` (hidden unless error), `#setup-history-btn` |
+| `#screen-setup` | `#p1-name`, `#p2-name` (text, `maxlength="20"`), `#balls-select` (`<select>` with values 6, 12, 18; 6 selected), `#cpu-toggle` (checkbox; when checked `#p2-name` is disabled and fixed to "Computer", and the computer flips its own innings automatically with `#flip-btn` disabled), `#toss-toggle` (checkbox), `#start-btn`, `#setup-error` (hidden unless error), `#setup-history-btn` |
 | `#screen-toss` | `#toss-result`, `#toss-continue-btn` |
 | `#screen-game` | `#innings-label` ("Innings 1"/"Innings 2"), `#batter-name`, `#score`, `#balls-left`, `#last-page`, `#last-result`, `#target-info` (hidden in innings 1; contains `#target` and `#runs-needed`), `#book` (decorative `<div>` with `aria-hidden`; gets class `flipping` while a ball is pending), `#flip-btn` (disabled while `#book` is `flipping`), `#mute-toggle` (button; text "Mute"/"Unmute", `aria-pressed` reflects muted), `#ball-log` (`<ol>`, one `<li>` per ball) |
 | `#screen-break` | `#break-score`, `#break-target`, `#break-continue-btn` |
