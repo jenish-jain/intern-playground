@@ -42,7 +42,7 @@ test("#balls-select default is 6 via the selected option", () => {
 test("require('../script.js') exports only functions without touching the DOM", () => {
   assert.equal(typeof document, "undefined");
   const mod = require("../script.js");
-  const allowed = ["flipPage", "resultForPage", "createGame", "playBall", "startSecondInnings",
+  const allowed = ["flipPage", "tossWinner", "resultForPage", "createGame", "playBall", "startSecondInnings",
     "computeResult", "normalizeNames", "loadPlayers", "savePlayers", "loadHistory",
     "addHistory", "clearHistory", "buildHistoryEntry", "resolveTheme", "toggleTheme",
     "loadTheme", "saveTheme"];
