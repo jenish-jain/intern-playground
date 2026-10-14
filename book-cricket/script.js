@@ -243,7 +243,13 @@ const ui = {
   setupError: null,
   pendingNames: null,
   pendingGame: null,
+  cpu: false,
+  cpuTimer: null,
+  savedP2Name: "",
 };
+
+const DEFAULT_CPU_DELAY_MS = 700;
+const COMPUTER_NAME = "Computer";
 
 /** True when the browser reports a dark colour-scheme preference. */
 function systemPrefersDark() {
@@ -294,7 +300,7 @@ function renderSetup() {
   error.classList.toggle("hidden", !ui.setupError);
   if (ui.pendingNames) {
     document.getElementById("p1-name").value = ui.pendingNames.p1;
-    document.getElementById("p2-name").value = ui.pendingNames.p2;
+    if (!ui.cpu) document.getElementById("p2-name").value = ui.pendingNames.p2;
     ui.pendingNames = null;
   }
 }
@@ -334,6 +340,64 @@ function renderGame() {
     document.getElementById("runs-needed").textContent = String(needed);
   }
   document.getElementById("ball-log").replaceChildren(...logItems(gameState.log[batter]));
+  document.getElementById("flip-btn").disabled = isCpuTurn();
+}
+
+/** True while the computer is batting and the game screen is showing. */
+function isCpuTurn() {
+  return ui.cpu && ui.screen === "game" && Boolean(gameState)
+    && gameState.phase === "innings" && gameState.currentBatter === "p2";
+}
+
+/** Milliseconds between the computer's automatic flips. */
+function cpuDelayMs() {
+  const config = window.BOOK_CRICKET_CONFIG;
+  const delay = config && config.cpuDelayMs;
+  return typeof delay === "number" && delay >= 0 ? delay : DEFAULT_CPU_DELAY_MS;
+}
+
+/** Cancel any pending computer flip. */
+function cancelCpuTimer() {
+  if (ui.cpuTimer !== null) clearTimeout(ui.cpuTimer);
+  ui.cpuTimer = null;
+}
+
+/** Keep exactly one computer flip pending while it is the computer's turn, none otherwise. */
+function syncCpuTimer() {
+  if (!isCpuTurn()) {
+    cancelCpuTimer();
+  } else if (ui.cpuTimer === null) {
+    ui.cpuTimer = setTimeout(handleCpuFlip, cpuDelayMs());
+  }
+}
+
+/** Disable and fix the Player 2 input while vs Computer is on; restore it when off. */
+function syncCpuToggle() {
+  const input = document.getElementById("p2-name");
+  const checked = document.getElementById("cpu-toggle").checked;
+  if (checked === input.disabled) return;
+  if (checked) {
+    ui.savedP2Name = input.value;
+    input.value = COMPUTER_NAME;
+  } else {
+    input.value = ui.savedP2Name;
+  }
+  input.disabled = checked;
+}
+
+/** Store a new game state and save the history entry once the match is finished. */
+function commitState(next) {
+  const finished = next.phase === "result" && gameState.phase !== "result";
+  gameState = next;
+  if (finished) addHistory(getStorage(), buildHistoryEntry(next));
+}
+
+/** The computer flips its ball. */
+function handleCpuFlip() {
+  ui.cpuTimer = null;
+  if (!isCpuTurn()) return;
+  commitState(playBall(gameState, flipPage()));
+  render();
 }
 
 /** Fill the innings break with the first innings score and the target. */
@@ -367,13 +431,15 @@ function render() {
   renderGame();
   renderBreak();
   renderResult();
+  syncCpuTimer();
 }
 
 /** Start a match from the setup form (via the toss screen when the toss is on), or show the name error. */
 function handleStart() {
+  ui.cpu = document.getElementById("cpu-toggle").checked;
   const names = normalizeNames(
     document.getElementById("p1-name").value,
-    document.getElementById("p2-name").value,
+    ui.cpu ? COMPUTER_NAME : document.getElementById("p2-name").value,
   );
   ui.setupError = names.error;
   if (!names.error) {
@@ -401,8 +467,8 @@ function handleTossContinue() {
 
 /** Play one ball on a random page. */
 function handleFlip() {
-  if (!gameState) return;
-  gameState = playBall(gameState, flipPage());
+  if (!gameState || isCpuTurn()) return;
+  commitState(playBall(gameState, flipPage()));
   render();
 }
 
@@ -451,6 +517,7 @@ function init() {
   ui.theme = resolveTheme(loadTheme(getStorage()), systemPrefersDark());
   document.getElementById("theme-toggle").addEventListener("click", handleThemeToggle);
   document.getElementById("start-btn").addEventListener("click", handleStart);
+  document.getElementById("cpu-toggle").addEventListener("change", syncCpuToggle);
   document.getElementById("toss-continue-btn").addEventListener("click", handleTossContinue);
   document.getElementById("flip-btn").addEventListener("click", handleFlip);
   document.getElementById("break-continue-btn").addEventListener("click", handleBreakContinue);
