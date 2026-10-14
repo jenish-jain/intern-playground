@@ -1,6 +1,11 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { loadApp } = require("./helpers/app.js");
+const { loadApp: loadAppWithOptions } = require("./helpers/app.js");
+
+/** loadApp with the page-flip animation delay set to 0 so a flip applies at once. */
+function loadApp(options = {}) {
+  return loadAppWithOptions({ config: { animationMs: 0 }, ...options });
+}
 
 /** A Math.random value that makes flipPage() return `page`. */
 function randomForPage(page) {

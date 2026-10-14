@@ -36,6 +36,7 @@ function audioContextStub(oscillators) {
  * Boot index.html in jsdom and evaluate script.js.
  * @param {object} [options]
  * @param {object} [options.storage] localStorage seed; each value is JSON-stringified.
+ * @param {Object<string, string>} [options.rawStorage] localStorage seed stored as-is (e.g. invalid JSON); applied after `storage`.
  * @param {number[]} [options.random] values returned by Math.random in order, then the last repeats (0.5 if empty).
  * @param {boolean} [options.confirm] value returned by window.confirm.
  * @param {object} [options.config] assigned to window.BOOK_CRICKET_CONFIG before the script runs.
@@ -43,7 +44,7 @@ function audioContextStub(oscillators) {
  * @param {boolean} [options.audio] when true, window.AudioContext is a stub that records oscillators; omitted, it stays undefined.
  * @returns {{ window: Window, document: Document, click: (id: string) => void, $: (selector: string) => Element | null, oscillators: object[] }}
  */
-function loadApp({ storage = {}, random = [], confirm = true, config, colorScheme, audio } = {}) {
+function loadApp({ storage = {}, rawStorage = {}, random = [], confirm = true, config, colorScheme, audio } = {}) {
   const dom = new JSDOM(html, { url: "http://localhost/", runScripts: "outside-only" });
   const { window } = dom;
   const { document } = window;
@@ -51,6 +52,9 @@ function loadApp({ storage = {}, random = [], confirm = true, config, colorSchem
 
   for (const [key, value] of Object.entries(storage)) {
     window.localStorage.setItem(key, JSON.stringify(value));
+  }
+  for (const [key, value] of Object.entries(rawStorage)) {
+    window.localStorage.setItem(key, value);
   }
 
   const values = random.slice();
