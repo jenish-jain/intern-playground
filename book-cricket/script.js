@@ -28,6 +28,13 @@ function resultForPage(page) {
   return { page, digit, runs, out, label };
 }
 
+/** Sound for a ball: "six" for 6 runs, "out" for OUT, otherwise null. */
+function soundForBall(ball) {
+  if (!ball) return null;
+  if (ball.out) return "out";
+  return ball.runs === MAX_RUNS ? "six" : null;
+}
+
 /** New game state in phase "innings", innings 1, with `firstBatter` batting. */
 function createGame({ p1, p2, ballsPerInnings, firstBatter = "p1" }) {
   const secondBatter = firstBatter === "p1" ? "p2" : "p1";
@@ -228,6 +235,18 @@ function saveTheme(storage, theme) {
   }
 }
 
+const MUTED_KEY = "bookCricket.muted";
+
+/** Saved sound mute flag; false unless the stored value is JSON true. */
+function loadMuted(storage) {
+  return readJson(storage, MUTED_KEY) === true;
+}
+
+/** Persist the sound mute flag as a JSON boolean; failures are ignored. */
+function saveMuted(storage, muted) {
+  writeJson(storage, MUTED_KEY, Boolean(muted));
+}
+
 // ---------------------------------------------------------------------------
 // UI (DOM)
 // ---------------------------------------------------------------------------
@@ -240,6 +259,7 @@ let gameState = null;
 
 const ui = {
   theme: "light",
+  muted: false,
   screen: "setup",
   setupError: null,
   pendingNames: null,
@@ -247,6 +267,31 @@ const ui = {
   pendingGame: null,
   flipping: false,
 };
+
+/** Tone for each sound: frequency in Hz, waveform, and length in seconds. */
+const SOUNDS = {
+  six: { frequency: 1047, type: "sine", seconds: 0.25 },
+  out: { frequency: 196, type: "sawtooth", seconds: 0.4 },
+};
+
+let audioContext = null;
+
+/** Play a short tone for "six" or "out". Silent when muted, when Web Audio is missing, or on any audio error. */
+function playSound(kind) {
+  const sound = SOUNDS[kind];
+  if (!sound || ui.muted || !window.AudioContext) return;
+  try {
+    if (!audioContext) audioContext = new window.AudioContext();
+    const oscillator = audioContext.createOscillator();
+    oscillator.type = sound.type;
+    oscillator.frequency.value = sound.frequency;
+    oscillator.connect(audioContext.destination);
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + sound.seconds);
+  } catch (err) {
+    // Sound is optional: the game keeps working without it.
+  }
+}
 
 /** Page-flip duration from window.BOOK_CRICKET_CONFIG.animationMs (default 600; 0 disables the wait). */
 function animationMs() {
@@ -279,6 +324,13 @@ function renderTheme() {
     toggle.textContent = dark ? "Light mode" : "Dark mode";
     toggle.setAttribute("aria-pressed", String(dark));
   }
+}
+
+/** Apply ui.muted to the mute toggle. */
+function renderMute() {
+  const toggle = document.getElementById("mute-toggle");
+  toggle.textContent = ui.muted ? "Unmute" : "Mute";
+  toggle.setAttribute("aria-pressed", String(ui.muted));
 }
 
 /** The screen to show: the game screens follow gameState.phase. */
@@ -416,6 +468,7 @@ function renderHistory() {
 /** Redraw the page from state. */
 function render() {
   renderTheme();
+  renderMute();
   renderScreens(currentScreen());
   renderSetup();
   renderToss();
@@ -457,12 +510,14 @@ function handleTossContinue() {
   render();
 }
 
-/** Play one ball on a random page, after the page-flip animation (applied at once when animationMs is 0). */
+/** Play one ball on a random page, after the page-flip animation (applied at once when animationMs is 0); sounds a six or a wicket. */
 function handleFlip() {
   if (!gameState || ui.flipping) return;
   const applyBall = () => {
+    const before = gameState;
     const wasFinished = gameState.phase === "result";
     gameState = playBall(gameState, flipPage());
+    if (gameState !== before) playSound(soundForBall(gameState.lastBall));
     if (!wasFinished && gameState.phase === "result") {
       addHistory(getStorage(), buildHistoryEntry(gameState));
     }
@@ -530,6 +585,13 @@ function handleThemeToggle() {
   render();
 }
 
+/** Mute or unmute sound effects and remember the choice. */
+function handleMuteToggle() {
+  ui.muted = !ui.muted;
+  saveMuted(getStorage(), ui.muted);
+  render();
+}
+
 /** Return window.localStorage, or null when accessing it throws (storage functions tolerate null). */
 function getStorage() {
   try {
@@ -550,8 +612,10 @@ function prefillPlayers() {
 /** Wire up the page. */
 function init() {
   ui.theme = resolveTheme(loadTheme(getStorage()), systemPrefersDark());
+  ui.muted = loadMuted(getStorage());
   prefillPlayers();
   document.getElementById("theme-toggle").addEventListener("click", handleThemeToggle);
+  document.getElementById("mute-toggle").addEventListener("click", handleMuteToggle);
   document.getElementById("start-btn").addEventListener("click", handleStart);
   document.getElementById("toss-continue-btn").addEventListener("click", handleTossContinue);
   document.getElementById("flip-btn").addEventListener("click", handleFlip);
@@ -566,9 +630,9 @@ function init() {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { flipPage, tossWinner, resultForPage, createGame, playBall, startSecondInnings,
-                     computeResult, normalizeNames, resolveTheme, toggleTheme, loadPlayers, savePlayers,
-                     loadHistory, addHistory, clearHistory, buildHistoryEntry, loadTheme,
-                     saveTheme };
+  module.exports = { flipPage, tossWinner, resultForPage, soundForBall, createGame, playBall,
+                     startSecondInnings, computeResult, normalizeNames, resolveTheme, toggleTheme,
+                     loadPlayers, savePlayers, loadHistory, addHistory, clearHistory, buildHistoryEntry,
+                     loadTheme, saveTheme, loadMuted, saveMuted };
 }
 if (typeof document !== "undefined") init();
