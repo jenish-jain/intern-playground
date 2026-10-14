@@ -45,7 +45,8 @@ test("require('../script.js') exports only functions without touching the DOM", 
   const allowed = ["flipPage", "tossWinner", "resultForPage", "soundForBall", "createGame", "playBall",
     "startSecondInnings", "computeResult", "normalizeNames", "loadPlayers", "savePlayers", "loadHistory",
     "addHistory", "clearHistory", "buildHistoryEntry", "resolveTheme", "toggleTheme",
-    "loadTheme", "saveTheme", "loadMuted", "saveMuted"];
+    "loadTheme", "saveTheme", "loadMuted", "saveMuted", "findTallyKey", "updateTally", "loadTally",
+    "saveTally"];
   for (const [name, value] of Object.entries(mod)) {
     assert.ok(allowed.includes(name), `${name} is a documented export`);
     assert.equal(typeof value, "function", `${name} is a function`);

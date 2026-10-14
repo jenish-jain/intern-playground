@@ -126,6 +126,31 @@ function toggleTheme(theme) {
   return theme === "dark" ? "light" : "dark";
 }
 
+/** Key of `tally` matching `name` case-insensitively, or undefined. */
+function findTallyKey(tally, name) {
+  const wanted = name.toLowerCase();
+  return Object.keys(tally).find((key) => key.toLowerCase() === wanted);
+}
+
+/** "w", "l" or "t" for a player's side of a finished match (`winner` null is a tie). */
+function outcomeFor(name, winner) {
+  if (winner === null || winner === undefined) return "t";
+  return name.toLowerCase() === winner.toLowerCase() ? "w" : "l";
+}
+
+/** Add a finished match (history entry shape) to a copy of `tally` `{ [name]: { w, l, t } }`; the input is not mutated. */
+function updateTally(tally, entry) {
+  const next = { ...tally };
+  for (const side of [entry.p1, entry.p2]) {
+    const key = findTallyKey(next, side.name);
+    const record = key === undefined ? { w: 0, l: 0, t: 0 } : next[key];
+    const outcome = outcomeFor(side.name, entry.winner);
+    if (key !== undefined) delete next[key];
+    next[side.name] = { ...record, [outcome]: record[outcome] + 1 };
+  }
+  return next;
+}
+
 // ---------------------------------------------------------------------------
 // Storage (wraps localStorage; every call in try/catch)
 // ---------------------------------------------------------------------------
@@ -205,6 +230,21 @@ function buildHistoryEntry(state, date = new Date()) {
     ballsPerInnings: state.ballsPerInnings,
     battedFirst: state.battingOrder[0],
   };
+}
+
+const TALLY_KEY = "bookCricket.tally";
+
+/** Saved win/loss/tie tally `{ [name]: { w, l, t } }`; {} if missing, corrupt or not an object. Malformed records are dropped. */
+function loadTally(storage) {
+  const data = readJson(storage, TALLY_KEY);
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+  const isRecord = (r) => r && ["w", "l", "t"].every((k) => Number.isInteger(r[k]));
+  return Object.fromEntries(Object.entries(data).filter(([, record]) => isRecord(record)));
+}
+
+/** Persist the tally; write failures are ignored. */
+function saveTally(storage, tally) {
+  writeJson(storage, TALLY_KEY, tally);
 }
 
 const THEME_KEY = "bookCricket.theme";
@@ -416,7 +456,17 @@ function renderBreak() {
     `${gameState.players[second]} needs ${gameState.target} to win`;
 }
 
-/** Fill the result screen: banner, both totals and both ball logs. */
+/** Fill each player's "W w · L l · T t" record from the saved tally (zeros when none). */
+function renderTally() {
+  const tally = loadTally(getStorage());
+  for (const side of ["p1", "p2"]) {
+    const key = findTallyKey(tally, gameState.players[side]);
+    const { w, l, t } = key === undefined ? { w: 0, l: 0, t: 0 } : tally[key];
+    document.getElementById(`tally-${side}`).textContent = `W ${w} · L ${l} · T ${t}`;
+  }
+}
+
+/** Fill the result screen: banner, both totals, both ball logs and the tally. */
 function renderResult() {
   if (!gameState || !gameState.result) return;
   const { winner, p1Score, p2Score } = gameState.result;
@@ -426,6 +476,7 @@ function renderResult() {
   document.getElementById("result-p2-score").textContent = String(p2Score);
   document.getElementById("result-log-p1").replaceChildren(...logItems(gameState.log.p1));
   document.getElementById("result-log-p2").replaceChildren(...logItems(gameState.log.p2));
+  renderTally();
 }
 
 /** Two-digit zero-padded number. */
@@ -519,7 +570,10 @@ function handleFlip() {
     gameState = playBall(gameState, flipPage());
     if (gameState !== before) playSound(soundForBall(gameState.lastBall));
     if (!wasFinished && gameState.phase === "result") {
-      addHistory(getStorage(), buildHistoryEntry(gameState));
+      const storage = getStorage();
+      const entry = buildHistoryEntry(gameState);
+      addHistory(storage, entry);
+      saveTally(storage, updateTally(loadTally(storage), entry));
     }
     ui.flipping = false;
     render();
@@ -632,7 +686,8 @@ function init() {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { flipPage, tossWinner, resultForPage, soundForBall, createGame, playBall,
                      startSecondInnings, computeResult, normalizeNames, resolveTheme, toggleTheme,
-                     loadPlayers, savePlayers, loadHistory, addHistory, clearHistory, buildHistoryEntry,
-                     loadTheme, saveTheme, loadMuted, saveMuted };
+                     findTallyKey, updateTally, loadPlayers, savePlayers, loadHistory, addHistory,
+                     clearHistory, buildHistoryEntry, loadTally, saveTally, loadTheme, saveTheme,
+                     loadMuted, saveMuted };
 }
 if (typeof document !== "undefined") init();
